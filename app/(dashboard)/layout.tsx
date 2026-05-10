@@ -1,10 +1,13 @@
 import { Sidebar } from "@/components/sidebar";
+import { syncBusinessOwnerFromAuth } from "@/lib/profile/sync-business-owner";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  await syncBusinessOwnerFromAuth();
+
   return (
     <div>
       <Sidebar />

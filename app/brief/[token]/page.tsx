@@ -1,13 +1,37 @@
 import { SectionCard } from "@/components/section-card";
 import { VoiceFeedback } from "@/components/voice-feedback";
 import { VersionDiff } from "@/components/version-diff";
-import { briefSections } from "@/lib/mock-data";
+import { briefToSections } from "@/lib/brief-helpers";
+import { supabase } from "@/lib/supabase";
 
-export default function PublicBriefPage({
+export default async function PublicBriefPage({
   params,
 }: {
-  params: { token: string };
+  params: Promise<{ token: string }>;
 }) {
+  const { token } = await params;
+
+  const { data: brief, error } = await supabase
+    .from("briefs")
+    .select("*")
+    .eq("token", token)
+    .maybeSingle();
+
+  if (error || !brief) {
+    return (
+      <main className="min-h-screen bg-[#f6efe4] px-5 py-10">
+        <div className="mx-auto max-w-4xl text-center">
+          <h1 className="text-2xl font-bold text-[#2a2118]">Brief not found</h1>
+          <p className="mt-2 text-[#7b6f63]">
+            This link may be invalid or the brief was removed.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  const sections = briefToSections(brief);
+
   return (
     <main className="min-h-screen bg-[#f6efe4] px-5 py-10">
       <div className="mx-auto max-w-4xl">
@@ -27,19 +51,23 @@ export default function PublicBriefPage({
         <VersionDiff />
 
         <div className="mt-8 space-y-5">
-          {briefSections.map((section) => (
+          {sections.map((section) => (
             <div key={section.id} className="card p-6">
               <h2 className="text-2xl font-bold text-[#2a2118]">
                 {section.title}
               </h2>
 
               <p className="mt-4 leading-8 text-[#5f5246]">
-                {section.content}
+                {section.content || "—"}
               </p>
 
               <div className="mt-6 flex flex-wrap gap-3">
-                <button className="btn-primary">✓ Looks right</button>
-                <button className="btn-secondary">✕ Edit this</button>
+                <button type="button" className="btn-primary">
+                  ✓ Looks right
+                </button>
+                <button type="button" className="btn-secondary">
+                  ✕ Edit this
+                </button>
               </div>
 
               <textarea
@@ -53,7 +81,9 @@ export default function PublicBriefPage({
         </div>
 
         <div className="mt-8 flex justify-end">
-          <button className="btn-primary">Submit feedback</button>
+          <button type="button" className="btn-primary">
+            Submit feedback
+          </button>
         </div>
       </div>
     </main>

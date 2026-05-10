@@ -1,12 +1,19 @@
 import { UploadDropzone } from "@/components/upload-dropzone";
-import { clients } from "@/lib/mock-data";
+import { createServerSupabase } from "@/lib/supabase";
 
-export default function UploadForClientPage({
+export default async function UploadForClientPage({
   params,
 }: {
-  params: { clientId: string };
+  params: Promise<{ clientId: string }>;
 }) {
-  const client = clients.find((item) => item.id === params.clientId);
+  const { clientId } = await params;
+  const supabase = await createServerSupabase();
+
+  const { data: client } = await supabase
+    .from("clients")
+    .select("*")
+    .eq("id", clientId)
+    .maybeSingle();
 
   if (!client) {
     return <p>Client not found.</p>;

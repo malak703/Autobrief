@@ -1,18 +1,32 @@
 import Link from "next/link";
 import { BriefCard } from "@/components/brief-card";
-import { briefs, clients } from "@/lib/mock-data";
+import { createServerSupabase } from "@/lib/supabase";
 
-export default function ClientDetailsPage({
+export default async function ClientDetailsPage({
   params,
 }: {
-  params: { clientId: string };
+  params: Promise<{ clientId: string }>;
 }) {
-  const client = clients.find((item) => item.id === params.clientId);
-  const clientBriefs = briefs.filter((brief) => brief.clientId === params.clientId);
+  const { clientId } = await params;
+  const supabase = await createServerSupabase();
+
+  const { data: client } = await supabase
+    .from("clients")
+    .select("*")
+    .eq("id", clientId)
+    .maybeSingle();
+
+  const { data: clientBriefs } = await supabase
+    .from("briefs")
+    .select("*")
+    .eq("client_id", clientId)
+    .order("created_at", { ascending: false });
 
   if (!client) {
     return <p>Client not found.</p>;
   }
+
+  const briefs = clientBriefs ?? [];
 
   return (
     <div>
@@ -26,9 +40,8 @@ export default function ClientDetailsPage({
               {client.name}
             </h1>
             <p className="mt-3 text-lg text-[#7b6f63]">
-              {client.contactPerson} · {client.email}
+              {client.email ?? "No email"} · {client.company ?? "No company"}
             </p>
-            <p className="mt-1 text-[#7b6f63]">{client.industry}</p>
           </div>
 
           <Link href={`/clients/${client.id}/upload`} className="btn-primary">
@@ -46,11 +59,15 @@ export default function ClientDetailsPage({
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        {clientBriefs.map((brief) => (
-          <BriefCard key={brief.id} brief={brief} />
-        ))}
-      </div>
+      {briefs.length === 0 ? (
+        <p className="text-[#7b6f63]">No briefs for this client yet.</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          {briefs.map((brief) => (
+            <BriefCard key={brief.id} brief={brief} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

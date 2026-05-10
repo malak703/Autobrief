@@ -1,18 +1,33 @@
 import { CompletionMeter } from "@/components/completion-meter";
 import { SectionCard } from "@/components/section-card";
 import { VersionDiff } from "@/components/version-diff";
-import { briefSections, briefs } from "@/lib/mock-data";
+import {
+  briefToSections,
+  gapsToMissingList,
+} from "@/lib/brief-helpers";
+import { createServerSupabase } from "@/lib/supabase";
 
-export default function BriefDetailsPage({
+export default async function BriefDetailsPage({
   params,
 }: {
-  params: { briefId: string };
+  params: Promise<{ briefId: string }>;
 }) {
-  const brief = briefs.find((item) => item.id === params.briefId);
+  const { briefId } = await params;
+  const supabase = await createServerSupabase();
+
+  const { data: brief } = await supabase
+    .from("briefs")
+    .select("*")
+    .eq("id", briefId)
+    .maybeSingle();
 
   if (!brief) {
     return <p>Brief not found.</p>;
   }
+
+  const completion = brief.completion_score ?? 0;
+  const missing = gapsToMissingList(brief.gaps);
+  const sections = briefToSections(brief);
 
   return (
     <div>
@@ -23,20 +38,21 @@ export default function BriefDetailsPage({
               Brief review
             </p>
             <h1 className="mt-2 text-5xl font-bold text-[#2a2118]">
-              {brief.title}
+              {(brief.summary ?? "Brief").slice(0, 120)}
+              {(brief.summary?.length ?? 0) > 120 ? "…" : ""}
             </h1>
             <p className="mt-3 text-lg text-[#7b6f63]">
               Version {brief.version} · {brief.status.replace("_", " ")}
             </p>
           </div>
 
-          <button className="btn-primary" disabled={brief.completion < 100}>
+          <button type="button" className="btn-primary" disabled={completion < 100}>
             Send to client
           </button>
         </div>
 
         <div className="mt-8">
-          <CompletionMeter value={brief.completion} missing={brief.missing} />
+          <CompletionMeter value={completion} missing={missing} />
         </div>
       </div>
 
@@ -45,7 +61,7 @@ export default function BriefDetailsPage({
       </div>
 
       <div className="space-y-5">
-        {briefSections.map((section) => (
+        {sections.map((section) => (
           <SectionCard key={section.id} section={section} />
         ))}
       </div>
