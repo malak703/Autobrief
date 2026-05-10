@@ -1,5 +1,6 @@
 import type { Brief } from "@/lib/types";
 import type { BriefSection } from "@/lib/types";
+import type { NormalizedIntake } from "@/lib/intake-parser";
 
 const SECTION_META: { id: BriefSection["id"]; title: string }[] = [
   { id: "summary", title: "What the client wants" },
@@ -50,4 +51,21 @@ export function briefToSections(brief: Brief): BriefSection[] {
     content: contentMap[id]?.trim() ?? "",
     status: "pending" as const,
   }));
+}
+
+export function parseNormalizedInput(rawInput: string | null): NormalizedIntake | null {
+  if (!rawInput?.trim()) return null;
+  try {
+    const parsed = JSON.parse(rawInput) as Partial<NormalizedIntake>;
+    if (!parsed || typeof parsed !== "object") return null;
+    return {
+      texts: Array.isArray(parsed.texts) ? parsed.texts : [],
+      voice: Array.isArray(parsed.voice) ? parsed.voice : [],
+      images: Array.isArray(parsed.images) ? parsed.images : [],
+      documents: Array.isArray(parsed.documents) ? parsed.documents : [],
+      other: Array.isArray(parsed.other) ? parsed.other : [],
+    };
+  } catch {
+    return null;
+  }
 }

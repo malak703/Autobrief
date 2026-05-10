@@ -1,7 +1,7 @@
 import { SectionCard } from "@/components/section-card";
 import { VoiceFeedback } from "@/components/voice-feedback";
 import { VersionDiff } from "@/components/version-diff";
-import { briefToSections } from "@/lib/brief-helpers";
+import { briefToSections, parseNormalizedInput } from "@/lib/brief-helpers";
 import { supabase } from "@/lib/supabase";
 
 export default async function PublicBriefPage({
@@ -31,6 +31,7 @@ export default async function PublicBriefPage({
   }
 
   const sections = briefToSections(brief);
+  const intake = parseNormalizedInput(brief.raw_input);
 
   return (
     <main className="min-h-screen bg-[#f6efe4] px-5 py-10">
@@ -49,6 +50,48 @@ export default async function PublicBriefPage({
         </div>
 
         <VersionDiff />
+
+        {intake && (intake.voice.length > 0 || intake.images.length > 0) && (
+          <div className="card mb-8 p-6">
+            <h2 className="text-2xl font-bold text-[#2a2118]">Uploaded Media</h2>
+            
+            {intake.voice.length > 0 && (
+              <div className="mt-4">
+                <h3 className="font-semibold text-[#2a2118]">Voice Notes ({intake.voice.length})</h3>
+                <div className="mt-2 space-y-2">
+                  {intake.voice.map((row, idx) => (
+                    <div key={`${row.fileName}-${idx}`} className="rounded-xl bg-white p-3">
+                      <p className="text-sm text-[#5f5246]">{row.fileName}</p>
+                      {row.fileUrl && (
+                        <audio className="mt-2 w-full" controls src={row.fileUrl} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {intake.images.length > 0 && (
+              <div className="mt-4">
+                <h3 className="font-semibold text-[#2a2118]">Images ({intake.images.length})</h3>
+                <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {intake.images.map((row, idx) => (
+                    <div key={`${row.fileName}-${idx}`} className="rounded-xl bg-white p-3">
+                      <p className="text-sm text-[#5f5246]">{row.fileName}</p>
+                      {row.fileUrl && (
+                        <img
+                          src={row.fileUrl}
+                          alt={row.fileName}
+                          className="mt-2 h-40 w-full rounded-lg object-cover"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mt-8 space-y-5">
           {sections.map((section) => (
