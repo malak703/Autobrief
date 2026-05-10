@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SignOutButton } from "@/components/sign-out-button";
 import {
   Building2,
   LayoutDashboard,
@@ -18,7 +19,7 @@ const nav = [
 
 export function Sidebar() {
   return (
-    <aside className="fixed left-0 top-0 h-screen w-72 border-r border-[#e8dccd] bg-[#fffaf2] px-5 py-6">
+    <aside className="fixed left-0 top-0 flex h-screen w-72 flex-col border-r border-[#e8dccd] bg-[#fffaf2] px-5 py-6">
       <div className="mb-10">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#5b3f2a] text-white">
@@ -32,7 +33,7 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="space-y-2">
+      <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto">
         {nav.map((item) => {
           const Icon = item.icon;
 
@@ -48,6 +49,10 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      <div className="mt-auto border-t border-[#e8dccd] pt-5">
+        <SignOutButton />
+      </div>
     </aside>
   );
 }

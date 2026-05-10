@@ -1,4 +1,33 @@
 import { BriefCard } from "@/components/brief-card";
+<<<<<<< HEAD
+import { createServerSupabase } from "@/lib/supabase";
+
+export default async function BriefsIndexPage() {
+  const supabase = await createServerSupabase();
+  const { data: briefs } = await supabase
+    .from("briefs")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  const rows = briefs ?? [];
+
+  return (
+    <div>
+      <div className="mb-8">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#9a7b52]">
+          Briefs
+        </p>
+        <h1 className="mt-2 text-5xl font-bold text-[#2a2118]">All briefs</h1>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-[#7b6f63]">No briefs yet.</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+          {rows.map((brief) => (
+            <BriefCard key={brief.id} brief={brief} />
+          ))}
+=======
 import { briefs, clients } from "@/lib/mock-data";
 import Link from "next/link";
 
@@ -100,8 +129,13 @@ export default function BriefsPage() {
           <Link href="/clients" className="btn-primary mt-6 inline-block">
             Go to clients
           </Link>
+>>>>>>> c8cbc6b2a6724a3f8e08ddc0b9a64d0d0c241a62
         </div>
       )}
     </div>
   );
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> c8cbc6b2a6724a3f8e08ddc0b9a64d0d0c241a62

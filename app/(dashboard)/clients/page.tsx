@@ -1,10 +1,49 @@
+import { AddClientForm } from "@/components/add-client-form";
 import { ClientCard } from "@/components/client-card";
-import { clients } from "@/lib/mock-data";
+import { createServerSupabase } from "@/lib/supabase";
+import { syncBusinessOwnerFromAuth } from "@/lib/profile/sync-business-owner";
 
-export default function ClientsPage() {
+export default async function ClientsPage() {
+  const supabase = await createServerSupabase();
+  
+  // Ensure business owner record exists for authenticated users
+  await syncBusinessOwnerFromAuth();
+
+  const { data: clients, error: clientsError } = await supabase
+    .from("clients")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  const { data: briefLinks, error: briefsCountError } = await supabase
+    .from("briefs")
+    .select("client_id");
+
+  const countByClient = new Map<string, number>();
+  for (const row of briefLinks ?? []) {
+    const cid = row.client_id as string;
+    countByClient.set(cid, (countByClient.get(cid) ?? 0) + 1);
+  }
+
+  const rows = clients ?? [];
+
   return (
     <div>
-      <div className="mb-8 flex items-start justify-between">
+      {(clientsError || briefsCountError) && (
+        <div className="card mb-6 border border-[#efc9c2] bg-[#fff1ef] p-4 text-sm text-[#9d574d]">
+          <p className="font-semibold">Could not load data from Supabase</p>
+          <p className="mt-1">
+            {clientsError?.message ?? briefsCountError?.message}
+          </p>
+          <p className="mt-2 text-[#7b6f63]">
+            Check that the <code className="rounded bg-[#efe3d4] px-1">clients</code> table exists, RLS allows
+            access for <code className="rounded bg-[#efe3d4] px-1">auth.uid()</code>, and{" "}
+            <code className="rounded bg-[#efe3d4] px-1">owner_id</code> references{" "}
+            <code className="rounded bg-[#efe3d4] px-1">business_owners.id</code>.
+          </p>
+        </div>
+      )}
+
+      <div className="mb-8 flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#9a7b52]">
             Clients
@@ -17,7 +56,7 @@ export default function ClientsPage() {
           </p>
         </div>
 
-        <button className="btn-primary">Add client</button>
+        <AddClientForm />
       </div>
 
       <div className="mb-8">
@@ -27,11 +66,19 @@ export default function ClientsPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        {clients.map((client) => (
-          <ClientCard key={client.id} client={client} />
-        ))}
-      </div>
+      {rows.length === 0 ? (
+        <p className="text-[#7b6f63]">No clients yet.</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+          {rows.map((client) => (
+            <ClientCard
+              key={client.id}
+              client={client}
+              activeBriefs={countByClient.get(client.id) ?? 0}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

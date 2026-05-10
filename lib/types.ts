@@ -1,54 +1,64 @@
-export type UserRole = "admin" | "employee";
-
-export type Company = {
+export type BusinessOwner = {
   id: string;
-  name: string;
-  plan: string;
-  employeesCount: number;
-  clientsCount: number;
-};
-
-export type Employee = {
-  id: string;
-  companyId: string;
-  name: string;
-  email: string;
-  role: UserRole;
+  user_id: string;
+  company_name: string | null;
+  full_name: string | null;
+  logo_url: string | null;
+  created_at: string;
 };
 
 export type Client = {
   id: string;
-  companyId: string;
+  owner_id: string;
   name: string;
-  email: string;
-  contactPerson: string;
-  industry: string;
-  activeBriefs: number;
-  lastActivity: string;
+  email: string | null;
+  company: string | null;
+  notes: string | null;
+  created_at: string;
 };
 
 export type BriefStatus =
   | "draft"
-  | "ready"
   | "sent"
-  | "needs_revision"
   | "confirmed"
-  | "locked";
+  | "needs_revision";
 
 export type Brief = {
   id: string;
-  companyId: string;
-  clientId: string;
-  title: string;
-  status: BriefStatus;
-  completion: number;
-  missing: string[];
+  client_id: string;
+  owner_id: string;
+  token: string;
   version: number;
-  updatedAt: string;
+  parent_id: string | null;
+  status: BriefStatus;
+  raw_input: string | null;
+  voice_url: string | null;
+  image_urls: string[] | null;
+  filtered_content: string | null;
+  summary: string | null;
+  goals: string | null;
+  gaps: string | null;
+  followup_questions: string | null;
+  extracted_date: string | null;
+  completion_score: number | null;
+  created_at: string;
+  confirmed_at: string | null;
 };
 
-export type BriefSection = {
+export type Feedback = {
   id: string;
+  brief_id: string;
+  section: "summary" | "goals" | "gaps" | "followup";
+  status: "accepted" | "needs_edit";
+  text_comment: string | null;
+  voice_url: string | null;
+  voice_transcript: string | null;
+  created_at: string;
+};
+
+/** UI shape for editable brief sections (dashboard). */
+export type BriefSection = {
+  id: "summary" | "goals" | "gaps" | "followup";
   title: string;
   content: string;
   status: "accepted" | "needs_edit" | "pending";
