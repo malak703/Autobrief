@@ -10,7 +10,6 @@ import {
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/companies", label: "Companies", icon: Building2 },
   { href: "/clients", label: "Clients", icon: Users },
   { href: "/briefs", label: "Briefs", icon: FileText },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
