@@ -29,7 +29,7 @@ export default async function UploadForClientPage({
           New brief for {client.name}
         </h1>
         <p className="mt-3 max-w-2xl text-lg text-[#7b6f63]">
-          Upload WhatsApp .zip, screenshots, voice notes, or all of them together. This upload will be attached only to this client.
+          Upload WhatsApp export, Telegram export, screenshots, voice notes, raw files, or all of them together in one form. This upload is attached only to this client.
         </p>
       </div>
 
