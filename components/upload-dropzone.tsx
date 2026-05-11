@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { UploadCloud, Mic, Image, MessageSquare, Send } from "lucide-react";
 import { createBriefFromUpload } from "@/app/actions/briefs";
@@ -19,6 +19,24 @@ export function UploadDropzone({ clientId }: { clientId: string }) {
   const [selectedIndexes, setSelectedIndexes] = useState<number[]>([]);
   const [rangeStart, setRangeStart] = useState("");
   const [rangeEnd, setRangeEnd] = useState("");
+  const [extractStatus, setExtractStatus] = useState<"checking" | "ok" | "error">("checking");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/extract-health")
+      .then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as { ok?: boolean };
+        if (cancelled) return;
+        if (res.ok && data.ok) setExtractStatus("ok");
+        else setExtractStatus("error");
+      })
+      .catch(() => {
+        if (!cancelled) setExtractStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const fileLabel = useMemo(() => {
     if (files.length === 0) return "No files selected yet";
@@ -77,6 +95,41 @@ export function UploadDropzone({ clientId }: { clientId: string }) {
           Upload WhatsApp/Telegram exports (.zip, .txt, .json), voice notes,
           screenshots, or all at once. We organize the output under texts,
           voice, images, and documents.
+        </p>
+
+        <p className="mt-4 max-w-xl text-xs leading-relaxed text-[#5f5246]">
+          {extractStatus === "checking" && "Checking extract service (voice + image OCR)…"}
+          {extractStatus === "ok" && (
+            <>
+              <span className="font-semibold text-[#2d6a4f]">Extract service: connected.</span> Voice
+              notes and screenshots are sent for transcription/OCR when you generate the brief.{" "}
+              <a
+                href="/api/extract-health"
+                target="_blank"
+                rel="noreferrer"
+                className="text-[#5b3f2a] underline"
+              >
+                Open health JSON
+              </a>
+            </>
+          )}
+          {extractStatus === "error" && (
+            <>
+              <span className="font-semibold text-[#9d574d]">Extract service: not reachable.</span> From
+              the <code className="rounded bg-white/80 px-1">fastapi-service</code> folder run uvicorn on port
+              8000 (see README), or set{" "}
+              <code className="rounded bg-white/80 px-1">EXTRACT_SERVICE_URL</code> in{" "}
+              <code className="rounded bg-white/80 px-1">.env.local</code>, then refresh.{" "}
+              <a
+                href="/api/extract-health"
+                target="_blank"
+                rel="noreferrer"
+                className="text-[#5b3f2a] underline"
+              >
+                Diagnostics
+              </a>
+            </>
+          )}
         </p>
 
         <div className="mt-8 flex flex-wrap justify-center gap-3">

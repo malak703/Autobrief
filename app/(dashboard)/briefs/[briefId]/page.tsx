@@ -129,6 +129,12 @@ export default async function BriefDetailsPage({
                     ) : (
                       <p className="mt-1 text-xs text-[#8b7c6c]">No preview URL found.</p>
                     )}
+                    {row.transcript ? (
+                      <p className="mt-2 whitespace-pre-wrap rounded-lg bg-[#f5efe6] p-2 text-xs text-[#3d342c]">
+                        <span className="font-semibold text-[#2a2118]">Transcript:</span>{" "}
+                        {row.transcript}
+                      </p>
+                    ) : null}
                   </div>
                 ))}
                 {intake.voice.length === 0 && <p>No voice files detected.</p>}
@@ -150,6 +156,12 @@ export default async function BriefDetailsPage({
                     ) : (
                       <p className="text-xs text-[#8b7c6c]">No preview URL found.</p>
                     )}
+                    {row.transcript ? (
+                      <p className="mt-2 whitespace-pre-wrap rounded-lg bg-[#f5efe6] p-2 text-xs text-[#3d342c]">
+                        <span className="font-semibold text-[#2a2118]">Text from image:</span>{" "}
+                        {row.transcript}
+                      </p>
+                    ) : null}
                   </div>
                 ))}
                 {intake.images.length === 0 && <p>No images detected.</p>}

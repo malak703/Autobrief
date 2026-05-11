@@ -15,6 +15,8 @@ export type NormalizedMediaEntry = {
   fileUrl?: string | null;
   storageBucket?: string | null;
   storagePath?: string | null;
+  /** Filled after upload when the extract service transcribes/OCRs this file. */
+  transcript?: string | null;
 };
 
 export type NormalizedIntake = {
