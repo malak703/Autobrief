@@ -7,28 +7,24 @@ import {
   type NormalizedMediaEntry,
   type NormalizedTextEntry,
 } from "@/lib/intake-parser";
-import { extractImageRemote, transcribeVoiceRemote } from "@/lib/extract-service";
+import {
+  extractDeadlinesRemote,
+  extractImageRemote,
+  filterAndGenerateBriefRemote,
+  transcribeVoiceRemote,
+} from "@/lib/extract-service";
+import { parseProjectBriefIntoSections } from "@/lib/brief-helpers";
+import type { BriefSection } from "@/lib/types";
 import JSZip from "jszip";
 
 export type CreateBriefFromUploadResult =
   | { ok: true; briefId: string }
   | { ok: false; error: string };
 
+export type UpdateBriefSectionResult = { ok: true } | { ok: false; error: string };
+
 function makeToken() {
   return crypto.randomUUID().replace(/-/g, "");
-}
-
-function safeExtractTexts(rawInput: string | null): string[] {
-  if (!rawInput) return [];
-  try {
-    const parsed = JSON.parse(rawInput) as { texts?: { content?: string }[] };
-    if (!Array.isArray(parsed.texts)) return [];
-    return parsed.texts
-      .map((row) => (typeof row?.content === "string" ? row.content.trim() : ""))
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
 }
 
 function sanitizePathPart(input: string): string {
@@ -381,16 +377,26 @@ export async function createBriefFromUpload(
       : 0;
 
   const finalRawInput = JSON.stringify(normalized);
-  const extractedTexts = safeExtractTexts(finalRawInput);
-  const combinedText = extractedTexts.join("\n");
+
   const voiceTranscripts = normalized.voice
     .map((v) => v.transcript?.trim())
     .filter((t): t is string => Boolean(t));
   const imageTranscripts = normalized.images
     .map((img) => img.transcript?.trim())
     .filter((t): t is string => Boolean(t));
-  const filteredParts = [combinedText, ...voiceTranscripts, ...imageTranscripts].filter(Boolean);
-  const filtered_content = filteredParts.length > 0 ? filteredParts.join("\n\n") : null;
+
+  const labeledPipelineParts: string[] = [];
+  for (const row of normalized.texts) {
+    const c = row.content?.trim();
+    if (c) labeledPipelineParts.push(`[FROM TEXT]: ${c}`);
+  }
+  for (const vt of voiceTranscripts) {
+    labeledPipelineParts.push(`[FROM VOICE]: ${vt}`);
+  }
+  for (const it of imageTranscripts) {
+    labeledPipelineParts.push(`[FROM IMAGE]: ${it}`);
+  }
+  const pipelineInput = labeledPipelineParts.join("\n\n");
 
   const hasUsableContent =
     normalized.texts.length > 0 ||
@@ -413,7 +419,70 @@ export async function createBriefFromUpload(
     );
   }
   const followupExtra = followupProblems.length > 0 ? followupProblems.join("\n\n") : null;
-  const followup_questions = [baseFollowup, followupExtra].filter(Boolean).join("\n\n") || null;
+  const opsNotes = [baseFollowup, followupExtra].filter(Boolean).join("\n\n") || null;
+
+  const shouldRunPipeline = hasUsableContent && pipelineInput.trim().length > 0;
+  const pipelineResult = shouldRunPipeline
+    ? await filterAndGenerateBriefRemote(pipelineInput)
+    : null;
+
+  let filtered_content: string | null = null;
+  let summary: string | null = `New brief for ${client.name}`;
+  let goals: string | null = null;
+  let gaps: string | null = null;
+  let followup_questions: string | null = null;
+  let completion_score = 20;
+
+  if (!hasUsableContent) {
+    gaps = "No text messages detected; upload chat export or paste messages.";
+    followup_questions = opsNotes;
+    completion_score = 15;
+  } else if (!shouldRunPipeline) {
+    summary = "Nothing reached the AI brief pipeline.";
+    gaps =
+      "After extraction there was no non-empty text to send to the filter (check message selection, voice transcription, and image OCR). Intake was still saved.";
+    followup_questions = opsNotes;
+    completion_score = Math.max(20, 40 - (voiceTranscriptionFailures + imageExtractionFailures) * 10);
+  } else if (!pipelineResult || !pipelineResult.ok) {
+    const errMsg =
+      pipelineResult && !pipelineResult.ok ? pipelineResult.error : "No pipeline response.";
+    summary = "Automated brief generation failed.";
+    gaps = [
+      "Intake was saved in your workspace, but the filter + brief pipeline did not finish.",
+      errMsg,
+      "Confirm EXTRACT_SERVICE_URL points at your running FastAPI service and GROQ_API_KEY is set on that service (needed for filter + project brief, not only transcription/OCR).",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+    followup_questions = opsNotes;
+    completion_score = Math.max(
+      25,
+      50 - (voiceTranscriptionFailures + imageExtractionFailures) * 8
+    );
+  } else {
+    filtered_content = pipelineResult.filteredText.trim() || null;
+    const parsed = parseProjectBriefIntoSections(pipelineResult.projectBrief);
+    summary =
+      parsed.summary?.trim() ||
+      pipelineResult.projectBrief.trim().slice(0, 280) ||
+      summary;
+    goals = parsed.goals?.trim() || null;
+    gaps = parsed.gaps?.trim() || null;
+    const followParts = [
+      parsed.followup_questions?.trim(),
+      baseFollowup,
+      followupExtra,
+    ].filter(Boolean);
+    followup_questions = followParts.length > 0 ? followParts.join("\n\n---\n\n") : null;
+    completion_score = Math.min(
+      95,
+      72 +
+        (normalized.texts.length > 0 ? 12 : 0) +
+        (voiceTranscripts.length > 0 ? 5 : 0) +
+        (imageTranscripts.length > 0 ? 5 : 0) -
+        (voiceTranscriptionFailures + imageExtractionFailures) * 6
+    );
+  }
 
   const { data: inserted, error: insertError } = await supabase
     .from("briefs")
@@ -425,25 +494,14 @@ export async function createBriefFromUpload(
       status: "draft",
       raw_input: finalRawInput,
       filtered_content,
-      summary:
-        extractedTexts[0]?.slice(0, 280) ||
-        voiceTranscripts[0]?.slice(0, 280) ||
-        imageTranscripts[0]?.slice(0, 280) ||
-        `New brief for ${client.name}`,
-      goals: null,
-      gaps: !hasUsableContent
-        ? "No text messages detected; upload chat export or paste messages."
-        : null,
+      summary,
+      goals,
+      gaps,
       followup_questions,
       voice_url: normalized.voice.length > 0 ? normalized.voice[0].fileUrl : null,
       image_urls: normalized.images.map((row) => row.fileUrl).filter(Boolean),
       extracted_date: new Date().toISOString(),
-      completion_score: Math.min(
-        95,
-        (normalized.texts.length > 0 ? 45 : 20) +
-          (voiceTranscripts.length > 0 ? 12 : 0) +
-          (imageTranscripts.length > 0 ? 12 : 0)
-      ),
+      completion_score,
     })
     .select("id")
     .single();
@@ -455,9 +513,82 @@ export async function createBriefFromUpload(
     };
   }
 
+  if (filtered_content?.trim()) {
+    const dl = await extractDeadlinesRemote(filtered_content);
+    if (!dl.ok) {
+      console.error("[createBriefFromUpload] extractDeadlinesRemote:", dl.error);
+    }
+    if (dl.ok && dl.deadlines.length > 0) {
+      let insertedDeadlines = 0;
+      for (const row of dl.deadlines) {
+        const { error: dErr } = await supabase.from("deadlines").insert({
+          client_id: client.id,
+          extracted_text: row.extracted_text,
+          parsed_date: row.parsed_date,
+          calendar_event_id: null,
+        });
+        if (!dErr) insertedDeadlines++;
+      }
+      if (insertedDeadlines > 0) {
+        revalidatePath("/calendar");
+      }
+    }
+  }
+
   revalidatePath("/");
   revalidatePath("/briefs");
   revalidatePath(`/clients/${client.id}`);
   revalidatePath(`/briefs/${inserted.id}`);
   return { ok: true, briefId: inserted.id };
+}
+
+export async function updateBriefSection(
+  briefId: string,
+  sectionId: BriefSection["id"],
+  content: string
+): Promise<UpdateBriefSectionResult> {
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return { ok: false, error: "You must be signed in." };
+  }
+
+  const { data: owner, error: ownerError } = await supabase
+    .from("business_owners")
+    .select("id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (ownerError || !owner?.id) {
+    return {
+      ok: false,
+      error: ownerError?.message ?? "Workspace profile is missing for this account.",
+    };
+  }
+
+  const { data: brief, error: briefError } = await supabase
+    .from("briefs")
+    .select("id")
+    .eq("id", briefId)
+    .eq("owner_id", owner.id)
+    .maybeSingle();
+  if (briefError || !brief?.id) {
+    return { ok: false, error: briefError?.message ?? "Brief not found." };
+  }
+
+  const column = sectionId === "followup" ? "followup_questions" : sectionId;
+  const { error: updateError } = await supabase
+    .from("briefs")
+    .update({ [column]: content })
+    .eq("id", briefId)
+    .eq("owner_id", owner.id);
+
+  if (updateError) {
+    return { ok: false, error: updateError.message };
+  }
+
+  revalidatePath(`/briefs/${briefId}`);
+  return { ok: true };
 }

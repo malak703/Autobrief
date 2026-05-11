@@ -93,8 +93,8 @@ export function UploadDropzone({ clientId }: { clientId: string }) {
 
         <p className="mt-3 max-w-xl text-[#7b6f63]">
           Upload WhatsApp/Telegram exports (.zip, .txt, .json), voice notes,
-          screenshots, or all at once. We organize the output under texts,
-          voice, images, and documents.
+          screenshots, or all at once. After upload, teammates only see the
+          generated draft brief (editable)—not raw extracts or filter output.
         </p>
 
         <p className="mt-4 max-w-xl text-xs leading-relaxed text-[#5f5246]">

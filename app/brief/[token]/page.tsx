@@ -1,4 +1,3 @@
-import { SectionCard } from "@/components/section-card";
 import { VoiceFeedback } from "@/components/voice-feedback";
 import { VersionDiff } from "@/components/version-diff";
 import { briefToSections, parseNormalizedInput } from "@/lib/brief-helpers";

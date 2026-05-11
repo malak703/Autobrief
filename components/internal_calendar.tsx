@@ -6,9 +6,14 @@ import {
   ChevronRight,
   Clock,
   CheckCircle2,
+  Trash2,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { toggleDeadlineSubmitted } from "@/app/(dashboard)/calendar/actions";
+import {
+  deleteDeadline,
+  toggleDeadlineSubmitted,
+} from "@/app/(dashboard)/calendar/actions";
 
 type Deadline = {
   id: string;
@@ -83,6 +88,7 @@ function getMonthDays(selectedMonth: Date, deadlines: Deadline[]) {
 }
 
 export function InternalCalendar({ deadlines }: { deadlines: Deadline[] }) {
+  const router = useRouter();
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -135,7 +141,21 @@ export function InternalCalendar({ deadlines }: { deadlines: Deadline[] }) {
 
   function markDeadline(deadlineId: string, isSubmitted: boolean) {
     startTransition(() => {
-      toggleDeadlineSubmitted(deadlineId, isSubmitted);
+      void toggleDeadlineSubmitted(deadlineId, isSubmitted).then(() => router.refresh());
+    });
+  }
+
+  function removeDeadline(deadlineId: string) {
+    if (!window.confirm("Delete this deadline? This cannot be undone.")) {
+      return;
+    }
+    startTransition(() => {
+      void deleteDeadline(deadlineId)
+        .then(() => router.refresh())
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          window.alert(message);
+        });
     });
   }
 
@@ -317,16 +337,27 @@ export function InternalCalendar({ deadlines }: { deadlines: Deadline[] }) {
                     Client: {deadline.clients?.name ?? "Unknown client"}
                   </p>
 
-                  <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-2xl bg-[#fffaf2] p-3 font-semibold text-[#5b3f2a]">
-                    <input
-                      type="checkbox"
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <label className="flex cursor-pointer items-center gap-3 rounded-2xl bg-[#fffaf2] p-3 font-semibold text-[#5b3f2a]">
+                      <input
+                        type="checkbox"
+                        disabled={isPending}
+                        checked={false}
+                        onChange={() => markDeadline(deadline.id, true)}
+                        className="h-5 w-5"
+                      />
+                      Mark as submitted
+                    </label>
+                    <button
+                      type="button"
                       disabled={isPending}
-                      checked={false}
-                      onChange={() => markDeadline(deadline.id, true)}
-                      className="h-5 w-5"
-                    />
-                    Mark as submitted
-                  </label>
+                      onClick={() => removeDeadline(deadline.id)}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#e8c4c0] bg-white px-4 py-3 text-sm font-semibold text-[#9d574d] transition hover:bg-[#fff5f4]"
+                    >
+                      <Trash2 size={16} aria-hidden />
+                      Delete
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -363,16 +394,27 @@ export function InternalCalendar({ deadlines }: { deadlines: Deadline[] }) {
                     Client: {deadline.clients?.name ?? "Unknown client"}
                   </p>
 
-                  <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-2xl bg-[#fffaf2] p-3 font-semibold text-[#5b3f2a]">
-                    <input
-                      type="checkbox"
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <label className="flex cursor-pointer items-center gap-3 rounded-2xl bg-[#fffaf2] p-3 font-semibold text-[#5b3f2a]">
+                      <input
+                        type="checkbox"
+                        disabled={isPending}
+                        checked={false}
+                        onChange={() => markDeadline(deadline.id, true)}
+                        className="h-5 w-5"
+                      />
+                      Mark as submitted
+                    </label>
+                    <button
+                      type="button"
                       disabled={isPending}
-                      checked={false}
-                      onChange={() => markDeadline(deadline.id, true)}
-                      className="h-5 w-5"
-                    />
-                    Mark as submitted
-                  </label>
+                      onClick={() => removeDeadline(deadline.id)}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#e8c4c0] bg-white px-4 py-3 text-sm font-semibold text-[#9d574d] transition hover:bg-[#fff5f4]"
+                    >
+                      <Trash2 size={16} aria-hidden />
+                      Delete
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -410,13 +452,25 @@ export function InternalCalendar({ deadlines }: { deadlines: Deadline[] }) {
                     Client: {deadline.clients?.name ?? "Unknown client"}
                   </p>
 
-                  <button
-                    disabled={isPending}
-                    onClick={() => markDeadline(deadline.id, false)}
-                    className="btn-secondary mt-4"
-                  >
-                    Undo submit
-                  </button>
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => markDeadline(deadline.id, false)}
+                      className="btn-secondary"
+                    >
+                      Undo submit
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => removeDeadline(deadline.id)}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#e8c4c0] bg-white px-4 py-3 text-sm font-semibold text-[#9d574d] transition hover:bg-[#fff5f4]"
+                    >
+                      <Trash2 size={16} aria-hidden />
+                      Delete
+                    </button>
+                  </div>
                 </div>
               ))
             )}

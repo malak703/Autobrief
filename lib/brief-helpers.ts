@@ -53,6 +53,50 @@ export function briefToSections(brief: Brief): BriefSection[] {
   }));
 }
 
+/** Split FastAPI / Groq 4-section project brief into DB columns (best-effort). */
+export function parseProjectBriefIntoSections(full: string): {
+  summary: string | null;
+  goals: string | null;
+  gaps: string | null;
+  followup_questions: string | null;
+} {
+  const empty = {
+    summary: null as string | null,
+    goals: null as string | null,
+    gaps: null as string | null,
+    followup_questions: null as string | null,
+  };
+  const text = full.trim();
+  if (!text) return empty;
+
+  const stripTitleLine = (block: string) => {
+    const lines = block.split("\n");
+    if (lines.length <= 1) {
+      return block.replace(/^\d+\.\s*[^\n]*/, "").trim();
+    }
+    return lines.slice(1).join("\n").trim();
+  };
+
+  const blocks = text
+    .split(/\n(?=\d+\.\s)/)
+    .map((b) => b.trim())
+    .filter(Boolean);
+
+  for (const block of blocks) {
+    if (/^1\.\s/.test(block)) empty.summary = stripTitleLine(block) || block;
+    else if (/^2\.\s/.test(block)) empty.goals = stripTitleLine(block) || block;
+    else if (/^3\.\s/.test(block)) empty.gaps = stripTitleLine(block) || block;
+    else if (/^4\.\s/.test(block))
+      empty.followup_questions = stripTitleLine(block) || block;
+  }
+
+  if (!empty.summary && blocks.length === 1) {
+    empty.summary = blocks[0] ?? null;
+  }
+
+  return empty;
+}
+
 export function parseNormalizedInput(rawInput: string | null): NormalizedIntake | null {
   if (!rawInput?.trim()) return null;
   try {

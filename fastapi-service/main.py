@@ -3,8 +3,11 @@
 
 import asyncio
 import base64
+import json
 import os
+import re
 import tempfile
+from datetime import date
 from io import BytesIO
 from typing import List
 
@@ -12,6 +15,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, File, UploadFile, HTTPException, Body
 from groq import Groq
 from PIL import Image
+from pydantic import AliasChoices, BaseModel, Field
 
 # Lazy-load pytesseract so a broken optional stack (e.g. bad numpy wheel) does not crash app startup.
 _pytesseract_mod = None
@@ -36,6 +40,42 @@ def _get_pytesseract():
 # Load environment variables from .env file
 load_dotenv()
 
+WORK_FILTER_SYSTEM_PROMPT = (
+    "You are a filter. Your only job is to extract work-related \n"
+    "information from this conversation.\n\n"
+    "KEEP: project requirements, features requested, deadlines, \n"
+    "budgets, references, feedback, decisions made, anything \n"
+    "about the actual work.\n\n"
+    "REMOVE: greetings, jokes, personal talk, filler words, \n"
+    "reactions, off-topic messages, anything not about the work.\n\n"
+    "Return ONLY the extracted work content as plain bullet points. \n"
+    "Do not summarize. Do not rephrase. Use their exact words."
+)
+
+PROJECT_BRIEF_SYSTEM_PROMPT = (
+    "You are a professional project brief writer.\n"
+    "Below is a list of extracted client requirements. \n"
+    "Turn this into a structured project brief with these \n"
+    "exact 4 sections:\n\n"
+    "1. What the client wants — plain summary, 2-3 sentences max\n"
+    "2. Goals & success criteria — what does done look like\n"
+    "3. Gaps & unclear points — what's missing or contradictory\n"
+    "4. Follow-up questions — specific questions to fill the gaps\n\n"
+    "Be specific. No generic statements. If something isn't in \n"
+    "the input, don't invent it — flag it as a gap instead."
+)
+
+
+def _groq_api_key_or_raise() -> str:
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="GROQ_API_KEY environment variable is not set",
+        )
+    return api_key
+
+
 # Print which file is being loaded
 print(f"Loading FastAPI service from: {__file__}")
 
@@ -46,11 +86,134 @@ app = FastAPI(
     version="1.0.0"
 )
 
+
+class FilterWorkContentBody(BaseModel):
+    """Combined extracted text from text, voice, and image endpoints."""
+
+    text: str = Field(
+        ...,
+        validation_alias=AliasChoices("text", "extracted_text"),
+        description="Raw combined material (e.g. joined outputs from extract-text / extract-voice / extract-image).",
+    )
+
+
+class ProjectBriefBody(BaseModel):
+    """Filtered work bullets from POST /filter-work-content."""
+
+    filtered_text: str = Field(
+        ...,
+        validation_alias=AliasChoices("filtered_text", "text"),
+        description="Work-only bullet list (typically the filtered_text field from /filter-work-content).",
+    )
+
+
+class DeadlinesFromTextBody(BaseModel):
+    """Work-only bullets (same shape as filter output) to scan for dated milestones."""
+
+    text: str = Field(
+        ...,
+        validation_alias=AliasChoices("text", "filtered_text"),
+        description="Filtered work-related bullet points that may mention due dates.",
+    )
+
+
+_ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _strip_json_fences(s: str) -> str:
+    s = s.strip()
+    if not s.startswith("```"):
+        return s
+    lines = s.split("\n")
+    lines = lines[1:] if lines else []
+    if lines and lines[-1].strip().startswith("```"):
+        lines = lines[:-1]
+    return "\n".join(lines).strip()
+
+
+def _normalize_deadline_rows(raw: list) -> List[dict]:
+    out: List[dict] = []
+    for item in raw[:20]:
+        if not isinstance(item, dict):
+            continue
+        d = str(item.get("parsed_date") or item.get("date") or "").strip()
+        title = str(
+            item.get("extracted_text")
+            or item.get("requirement")
+            or item.get("deliverable")
+            or item.get("title")
+            or ""
+        ).strip()
+        if not d or not _ISO_DATE.match(d):
+            continue
+        if not title:
+            continue
+        out.append({"parsed_date": d, "extracted_text": title[:500]})
+    return out
+
+
+def _groq_extract_deadlines(work_bullets: str) -> List[dict]:
+    """Return [{parsed_date, extracted_text}, ...] from filtered bullets; [] on parse failure."""
+    api_key = _groq_api_key_or_raise()
+    model = (os.getenv("GROQ_DEADLINE_MODEL") or "llama-3.3-70b-versatile").strip()
+    client = Groq(api_key=api_key)
+    today_iso = date.today().isoformat()
+    system = (
+        "You extract explicit project deadlines from work-related bullet points. "
+        'Return ONLY a JSON object with a single key "deadlines" whose value is an array. '
+        'Each item must have "parsed_date" (string YYYY-MM-DD) and "extracted_text". '
+        "Rules for extracted_text (this becomes the calendar deadline name): "
+        "It MUST be the requirement, deliverable, or submission that is due on that date — "
+        "the same obligation described in the bullet (what must be submitted, delivered, or completed). "
+        "Use the client's exact wording for that requirement; do not invent scope. "
+        "You may remove only the date/time phrase from the string (e.g. drop 'by June 1' or 'before Friday') "
+        "so the name reads as the work item, not the schedule phrase. "
+        "Do not use generic titles like 'Deadline', 'Due date', or 'Milestone' alone. "
+        "If you cannot name a specific requirement tied to the date, omit that item. "
+        "Include only items with a clear calendar date tied to a stated deliverable or obligation. "
+        "You may use Today's date only to resolve relative phrases when the YYYY-MM-DD is unambiguous; "
+        "otherwise omit. "
+        'If there are no such deadlines, return {"deadlines": []}. '
+        "No markdown fences. No other keys."
+    )
+    user = f"Today's date: {today_iso}\n\nWork bullets:\n\n{work_bullets}"
+    completion = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        temperature=0.1,
+        max_tokens=2048,
+    )
+    raw = (completion.choices[0].message.content or "").strip()
+    try:
+        data = json.loads(_strip_json_fences(raw))
+    except json.JSONDecodeError:
+        return []
+    arr = data.get("deadlines") if isinstance(data, dict) else None
+    if not isinstance(arr, list):
+        return []
+    return _normalize_deadline_rows(arr)
+
+
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
+    """Health check endpoint (used by Next.js /api/extract-health)."""
     print("[OK] GET /health endpoint called")
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "service": "autobrief-fastapi-extract",
+        "post_routes": [
+            "/extract-voice",
+            "/extract-text",
+            "/extract-image",
+            "/filter-work-content",
+            "/filter-and-generate-brief",
+            "/generate-project-brief",
+            "/extract-deadlines",
+        ],
+    }
 
 def _coerce_audio_content_type(upload: UploadFile) -> str:
     """Browsers and zip exports often send application/octet-stream; infer from filename."""
@@ -189,6 +352,142 @@ async def extract_text_from_text(text: str = Body(...)):
             status_code=500,
             detail=f"Failed to process text: {str(e)}"
         )
+
+
+def _groq_filter_work_bullets(raw_text: str) -> str:
+    """Call Groq chat to keep only work-related lines as verbatim bullet points."""
+    api_key = _groq_api_key_or_raise()
+    model = (os.getenv("GROQ_FILTER_MODEL") or "llama-3.3-70b-versatile").strip()
+    client = Groq(api_key=api_key)
+    user_content = (
+        "The following is raw material from a conversation "
+        "(text, voice transcripts, and image OCR). "
+        "Labels such as [FROM TEXT], [FROM VOICE], or [FROM IMAGE] may appear.\n\n"
+        f"{raw_text}"
+    )
+    completion = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": WORK_FILTER_SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+        temperature=0.1,
+        max_tokens=8192,
+    )
+    return (completion.choices[0].message.content or "").strip()
+
+
+@app.post("/filter-work-content")
+async def filter_work_content(body: FilterWorkContentBody):
+    """
+    Take combined extracted text (from uploads / transcripts / OCR) and return
+    work-only content as bullet points via Groq (see WORK_FILTER_SYSTEM_PROMPT).
+
+    Optional env: GROQ_FILTER_MODEL (default: llama-3.3-70b-versatile).
+    """
+    print("[OK] POST /filter-work-content endpoint called")
+    raw = (body.text or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="No text provided.")
+    try:
+        filtered = await asyncio.to_thread(_groq_filter_work_bullets, raw)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to filter content: {str(e)}",
+        ) from e
+    return {"filtered_text": filtered}
+
+
+def _groq_project_brief_from_requirements(filtered_bullets: str) -> str:
+    """Turn filtered requirement bullets into the 4-section project brief."""
+    api_key = _groq_api_key_or_raise()
+    model = (os.getenv("GROQ_BRIEF_MODEL") or "llama-3.3-70b-versatile").strip()
+    client = Groq(api_key=api_key)
+    user_content = f"Extracted client requirements:\n\n{filtered_bullets}"
+    completion = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": PROJECT_BRIEF_SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+        temperature=0.2,
+        max_tokens=8192,
+    )
+    return (completion.choices[0].message.content or "").strip()
+
+
+@app.post("/generate-project-brief")
+async def generate_project_brief(body: ProjectBriefBody):
+    """
+    Input: output of /filter-work-content (work-only bullets).
+    Output: structured 4-section project brief via Groq.
+
+    Optional env: GROQ_BRIEF_MODEL (default: llama-3.3-70b-versatile).
+    """
+    print("[OK] POST /generate-project-brief endpoint called")
+    blob = (body.filtered_text or "").strip()
+    if not blob:
+        raise HTTPException(status_code=400, detail="No filtered_text provided.")
+    try:
+        brief = await asyncio.to_thread(_groq_project_brief_from_requirements, blob)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate project brief: {str(e)}",
+        ) from e
+    return {"project_brief": brief}
+
+
+@app.post("/filter-and-generate-brief")
+async def filter_and_generate_brief(body: FilterWorkContentBody):
+    """
+    One call: combined raw extracted text → filter → project brief.
+    Same inputs as /filter-work-content. Returns both intermediate and final text.
+    """
+    print("[OK] POST /filter-and-generate-brief endpoint called")
+    raw = (body.text or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="No text provided.")
+    try:
+        filtered = await asyncio.to_thread(_groq_filter_work_bullets, raw)
+        brief = await asyncio.to_thread(_groq_project_brief_from_requirements, filtered)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed pipeline: {str(e)}",
+        ) from e
+    return {"filtered_text": filtered, "project_brief": brief}
+
+
+@app.post("/extract-deadlines")
+async def extract_deadlines(body: DeadlinesFromTextBody):
+    """
+    Parse filtered work bullets for explicit deadlines; returns rows for the deadlines table.
+
+    Optional env: GROQ_DEADLINE_MODEL (default: llama-3.3-70b-versatile).
+    """
+    print("[OK] POST /extract-deadlines endpoint called")
+    text = (body.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="No text provided.")
+    try:
+        rows = await asyncio.to_thread(_groq_extract_deadlines, text)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to extract deadlines: {str(e)}",
+        ) from e
+    return {"deadlines": rows}
+
 
 def _tesseract_available() -> bool:
     pt = _get_pytesseract()
