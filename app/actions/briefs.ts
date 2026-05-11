@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
 import {
   normalizeIntakeFromFiles,
+  type NormalizedMediaEntry,
   type NormalizedTextEntry,
 } from "@/lib/intake-parser";
+import { extractImageRemote, transcribeVoiceRemote } from "@/lib/extract-service";
 import JSZip from "jszip";
 
 export type CreateBriefFromUploadResult =
@@ -48,6 +50,8 @@ function guessMimeType(fileName: string): string {
   if (ext === ".m4a") return "audio/mp4";
   if (ext === ".ogg" || ext === ".opus") return "audio/ogg";
   if (ext === ".wav") return "audio/wav";
+  if (ext === ".aac") return "audio/aac";
+  if (ext === ".webm") return "audio/webm";
   if (ext === ".pdf") return "application/pdf";
   return "application/octet-stream";
 }
@@ -177,6 +181,93 @@ function applyTextSelection(
   return texts.filter((_, idx) => selectedSet.has(idx));
 }
 
+async function loadMediaBytesForSection(
+  supabase: Awaited<ReturnType<typeof createServerSupabase>>,
+  section: NormalizedMediaEntry
+): Promise<ArrayBuffer | null> {
+  if (section.storageBucket && section.storagePath) {
+    const { data, error } = await supabase.storage
+      .from(section.storageBucket)
+      .download(section.storagePath);
+    if (error || !data) return null;
+    return await data.arrayBuffer();
+  }
+  const url = section.fileUrl;
+  if (url?.startsWith("data:")) {
+    const comma = url.indexOf(",");
+    if (comma === -1) return null;
+    const meta = url.slice(5, comma);
+    const payload = url.slice(comma + 1);
+    if (meta.endsWith(";base64")) {
+      const binary = atob(payload);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes.buffer;
+    }
+    return null;
+  }
+  if (url?.startsWith("http://") || url?.startsWith("https://")) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      return await res.arrayBuffer();
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+async function transcribeAllVoiceNotes(
+  supabase: Awaited<ReturnType<typeof createServerSupabase>>,
+  voiceSections: NormalizedMediaEntry[]
+): Promise<number> {
+  let failures = 0;
+  for (const section of voiceSections) {
+    const bytes = await loadMediaBytesForSection(supabase, section);
+    if (!bytes) {
+      failures++;
+      continue;
+    }
+    const mimeType =
+      section.mimeType && section.mimeType !== "application/octet-stream"
+        ? section.mimeType
+        : guessMimeType(section.fileName);
+    const result = await transcribeVoiceRemote(section.fileName, bytes, mimeType);
+    if (result.ok) {
+      section.transcript = result.extractedText;
+    } else {
+      failures++;
+    }
+  }
+  return failures;
+}
+
+async function extractAllImageScreenshots(
+  supabase: Awaited<ReturnType<typeof createServerSupabase>>,
+  imageSections: NormalizedMediaEntry[]
+): Promise<number> {
+  let failures = 0;
+  for (const section of imageSections) {
+    const bytes = await loadMediaBytesForSection(supabase, section);
+    if (!bytes) {
+      failures++;
+      continue;
+    }
+    const mimeType =
+      section.mimeType && section.mimeType !== "application/octet-stream"
+        ? section.mimeType
+        : guessMimeType(section.fileName);
+    const result = await extractImageRemote(section.fileName, bytes, mimeType);
+    if (result.ok) {
+      section.transcript = result.extractedText;
+    } else {
+      failures++;
+    }
+  }
+  return failures;
+}
+
 export async function createBriefFromUpload(
   formData: FormData
 ): Promise<CreateBriefFromUploadResult> {
@@ -279,9 +370,50 @@ export async function createBriefFromUpload(
   }
   normalized.texts = applyTextSelection(normalized.texts, selectedTextIndexes);
 
+  const voiceTranscriptionFailures =
+    normalized.voice.length > 0
+      ? await transcribeAllVoiceNotes(supabase, normalized.voice)
+      : 0;
+
+  const imageExtractionFailures =
+    normalized.images.length > 0
+      ? await extractAllImageScreenshots(supabase, normalized.images)
+      : 0;
+
   const finalRawInput = JSON.stringify(normalized);
   const extractedTexts = safeExtractTexts(finalRawInput);
   const combinedText = extractedTexts.join("\n");
+  const voiceTranscripts = normalized.voice
+    .map((v) => v.transcript?.trim())
+    .filter((t): t is string => Boolean(t));
+  const imageTranscripts = normalized.images
+    .map((img) => img.transcript?.trim())
+    .filter((t): t is string => Boolean(t));
+  const filteredParts = [combinedText, ...voiceTranscripts, ...imageTranscripts].filter(Boolean);
+  const filtered_content = filteredParts.length > 0 ? filteredParts.join("\n\n") : null;
+
+  const hasUsableContent =
+    normalized.texts.length > 0 ||
+    voiceTranscripts.length > 0 ||
+    imageTranscripts.length > 0;
+
+  const baseFollowup =
+    normalized.voice.length > 0 || normalized.images.length > 0
+      ? "Review uploaded media for missing context before sending."
+      : null;
+  const followupProblems: string[] = [];
+  if (voiceTranscriptionFailures > 0) {
+    followupProblems.push(
+      `${voiceTranscriptionFailures} voice note(s) could not be transcribed. Ensure the extract service is reachable (EXTRACT_SERVICE_URL / FASTAPI_URL) and GROQ_API_KEY is set on the API.`
+    );
+  }
+  if (imageExtractionFailures > 0) {
+    followupProblems.push(
+      `${imageExtractionFailures} image(s) could not be OCR’d. Same checks: extract service running and GROQ_API_KEY set for vision.`
+    );
+  }
+  const followupExtra = followupProblems.length > 0 ? followupProblems.join("\n\n") : null;
+  const followup_questions = [baseFollowup, followupExtra].filter(Boolean).join("\n\n") || null;
 
   const { data: inserted, error: insertError } = await supabase
     .from("briefs")
@@ -292,21 +424,26 @@ export async function createBriefFromUpload(
       version: 1,
       status: "draft",
       raw_input: finalRawInput,
-      filtered_content: combinedText || null,
-      summary: extractedTexts[0]?.slice(0, 280) || `New brief for ${client.name}`,
+      filtered_content,
+      summary:
+        extractedTexts[0]?.slice(0, 280) ||
+        voiceTranscripts[0]?.slice(0, 280) ||
+        imageTranscripts[0]?.slice(0, 280) ||
+        `New brief for ${client.name}`,
       goals: null,
-      gaps:
-        normalized.texts.length === 0
-          ? "No text messages detected; upload chat export or paste messages."
-          : null,
-      followup_questions:
-        normalized.voice.length > 0 || normalized.images.length > 0
-          ? "Review uploaded media for missing context before sending."
-          : null,
+      gaps: !hasUsableContent
+        ? "No text messages detected; upload chat export or paste messages."
+        : null,
+      followup_questions,
       voice_url: normalized.voice.length > 0 ? normalized.voice[0].fileUrl : null,
       image_urls: normalized.images.map((row) => row.fileUrl).filter(Boolean),
       extracted_date: new Date().toISOString(),
-      completion_score: normalized.texts.length > 0 ? 45 : 20,
+      completion_score: Math.min(
+        95,
+        (normalized.texts.length > 0 ? 45 : 20) +
+          (voiceTranscripts.length > 0 ? 12 : 0) +
+          (imageTranscripts.length > 0 ? 12 : 0)
+      ),
     })
     .select("id")
     .single();

@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+python-multipart
+groq
+python-dotenv
+aiofiles
+pytesseract
+Pillow
+pydantic
