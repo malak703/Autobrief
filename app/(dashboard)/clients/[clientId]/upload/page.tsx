@@ -1,4 +1,4 @@
-import { UploadDropzone } from "@/components/upload-dropzone";
+import { EnhancedUploadArea } from "@/components/enhanced-upload-area";
 import { createServerSupabase } from "@/lib/supabase";
 
 export default async function UploadForClientPage({
@@ -29,11 +29,11 @@ export default async function UploadForClientPage({
           New brief for {client.name}
         </h1>
         <p className="mt-3 max-w-2xl text-lg text-[#7b6f63]">
-          Upload WhatsApp export, Telegram export, screenshots, voice notes, raw files, or all of them together in one form. This upload is attached only to this client.
+          Upload multiple types of content in organized sections. Each section handles specific file types and processes them automatically. This upload is attached only to this client.
         </p>
       </div>
 
-      <UploadDropzone clientId={client.id} />
+      <EnhancedUploadArea clientId={client.id} />
 
       <div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-3">
         <div className="card p-5">
