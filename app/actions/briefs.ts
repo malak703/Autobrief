@@ -23,6 +23,8 @@ export type CreateBriefFromUploadResult =
 
 export type UpdateBriefSectionResult = { ok: true } | { ok: false; error: string };
 
+export type MarkBriefSentResult = { ok: true } | { ok: false; error: string };
+
 function makeToken() {
   return crypto.randomUUID().replace(/-/g, "");
 }
@@ -177,6 +179,19 @@ function applyTextSelection(
   return texts.filter((_, idx) => selectedSet.has(idx));
 }
 
+/** Keep only chat-export images whose basenames are selected; always keep `source: "raw"` uploads. */
+function applyChatImageNameSelection(
+  images: NormalizedMediaEntry[],
+  selectedLowerNames: string[] | null
+): NormalizedMediaEntry[] {
+  if (selectedLowerNames === null) return images;
+  const selected = new Set(selectedLowerNames);
+  return images.filter((img) => {
+    if (img.source === "raw") return true;
+    return selected.has(img.fileName.toLowerCase());
+  });
+}
+
 async function loadMediaBytesForSection(
   supabase: Awaited<ReturnType<typeof createServerSupabase>>,
   section: NormalizedMediaEntry
@@ -283,6 +298,7 @@ export async function createBriefFromUpload(
 
   const pastedText = String(formData.get("pastedText") ?? "");
   const selectedTextIndexesRaw = String(formData.get("selectedTextIndexes") ?? "[]");
+  const selectedImageFileNamesField = formData.get("selectedImageFileNames");
   const files = formData
     .getAll("assets")
     .filter((entry): entry is File => entry instanceof File && entry.size > 0);
@@ -365,6 +381,24 @@ export async function createBriefFromUpload(
     selectedTextIndexes = [];
   }
   normalized.texts = applyTextSelection(normalized.texts, selectedTextIndexes);
+
+  let selectedImageLowerNames: string[] | null = null;
+  if (selectedImageFileNamesField != null) {
+    const raw = String(selectedImageFileNamesField).trim();
+    if (raw !== "") {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed) && parsed.every((x): x is string => typeof x === "string")) {
+          selectedImageLowerNames = parsed.map((s) => s.toLowerCase());
+        }
+      } catch {
+        selectedImageLowerNames = null;
+      }
+    } else {
+      selectedImageLowerNames = [];
+    }
+  }
+  normalized.images = applyChatImageNameSelection(normalized.images, selectedImageLowerNames);
 
   const voiceTranscriptionFailures =
     normalized.voice.length > 0
@@ -590,5 +624,54 @@ export async function updateBriefSection(
   }
 
   revalidatePath(`/briefs/${briefId}`);
+  return { ok: true };
+}
+
+export async function markBriefSentToClient(briefId: string): Promise<MarkBriefSentResult> {
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return { ok: false, error: "You must be signed in." };
+  }
+
+  const { data: owner, error: ownerError } = await supabase
+    .from("business_owners")
+    .select("id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (ownerError || !owner?.id) {
+    return {
+      ok: false,
+      error: ownerError?.message ?? "Workspace profile is missing for this account.",
+    };
+  }
+
+  const { data: row, error: briefError } = await supabase
+    .from("briefs")
+    .select("id,status")
+    .eq("id", briefId)
+    .eq("owner_id", owner.id)
+    .maybeSingle();
+  if (briefError || !row?.id) {
+    return { ok: false, error: briefError?.message ?? "Brief not found." };
+  }
+
+  if (row.status === "draft") {
+    const { error: updateError } = await supabase
+      .from("briefs")
+      .update({ status: "sent" })
+      .eq("id", briefId)
+      .eq("owner_id", owner.id);
+    if (updateError) {
+      return { ok: false, error: updateError.message };
+    }
+  }
+
+  revalidatePath(`/briefs/${briefId}`);
+  revalidatePath("/briefs");
+  revalidatePath("/");
   return { ok: true };
 }

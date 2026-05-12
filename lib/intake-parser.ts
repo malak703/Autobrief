@@ -283,3 +283,53 @@ export async function normalizeIntakeFromFiles(
 
   return intake;
 }
+
+/**
+ * Build blob: URLs for chat-export images so the upload UI can show thumbnails
+ * before upload. Caller must revoke URLs when replacing or unmounting.
+ */
+export async function resolveZipImagePreviewBlobUrls(
+  chatFiles: File[],
+  imageEntries: NormalizedMediaEntry[]
+): Promise<string[]> {
+  const urls: string[] = imageEntries.map(() => "");
+  const zips = chatFiles.filter((f) => f.name.toLowerCase().endsWith(".zip"));
+  if (zips.length === 0 || imageEntries.length === 0) return urls;
+
+  const zipInstances: JSZip[] = [];
+  for (const zf of zips) {
+    try {
+      zipInstances.push(await JSZip.loadAsync(await zf.arrayBuffer()));
+    } catch {
+      // skip invalid zip
+    }
+  }
+  if (zipInstances.length === 0) return urls;
+
+  for (let i = 0; i < imageEntries.length; i++) {
+    const row = imageEntries[i];
+    if (classifyByName(row.fileName) !== "images") continue;
+    const target = row.fileName.toLowerCase();
+    for (const zip of zipInstances) {
+      let found: JSZip.JSZipObject | null = null;
+      for (const entry of Object.values(zip.files)) {
+        if (entry.dir) continue;
+        const base = (entry.name.split("/").pop() ?? entry.name).toLowerCase();
+        if (base === target) {
+          found = entry;
+          break;
+        }
+      }
+      if (!found) continue;
+      try {
+        const blob = await found.async("blob");
+        urls[i] = URL.createObjectURL(blob);
+        break;
+      } catch {
+        // skip bad entry
+      }
+    }
+  }
+
+  return urls;
+}

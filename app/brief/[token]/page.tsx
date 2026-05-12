@@ -1,6 +1,10 @@
 import { VoiceFeedback } from "@/components/voice-feedback";
 import { VersionDiff } from "@/components/version-diff";
-import { briefToSections, parseNormalizedInput } from "@/lib/brief-helpers";
+import {
+  briefToSections,
+  parseNormalizedInput,
+  splitFollowupQuestionsField,
+} from "@/lib/brief-helpers";
 import { supabase } from "@/lib/supabase";
 
 export default async function PublicBriefPage({
@@ -96,48 +100,62 @@ export default async function PublicBriefPage({
           {sections.map((section) => {
             if (section.id === "followup") {
               const content = section.content || "";
-              const splitChar = content.includes("@@@") ? "@@@" : "\n";
-              
-              const questions = content
-                .split(splitChar)
-                .map((q) => q.trim())
-                .filter(
-                  (q) =>
-                    q.length > 0 &&
-                    !q.toLowerCase().startsWith("here are") &&
-                    !q.toLowerCase().startsWith("follow-up") &&
-                    !q.toLowerCase().startsWith("follow up")
-                );
+              const { questions, opsNotes } =
+                splitFollowupQuestionsField(content);
 
-              return (
-                <div key={section.id} className="card p-6">
-                  <h2 className="text-2xl font-bold text-[#2a2118]">
-                    {section.title}
-                  </h2>
-
-                  {questions.length > 0 ? (
-                    <div className="mt-6 space-y-6">
-                      {questions.map((q, idx) => (
-                        <div
-                          key={idx}
-                          className="rounded-xl border border-[#e8dccd] bg-[#fffaf2] p-5"
-                        >
-                          <p className="font-medium text-[#2a2118]">{q}</p>
-                          <textarea
-                            placeholder="Type your answer here..."
-                            className="mt-3 min-h-24 w-full rounded-xl border border-[#e8dccd] bg-white p-4 outline-none"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
+              if (questions.length === 0) {
+                return (
+                  <div key={section.id} className="card p-6">
+                    <h2 className="text-2xl font-bold text-[#2a2118]">
+                      {section.title}
+                    </h2>
                     <p className="mt-4 leading-8 text-[#5f5246] whitespace-pre-wrap">
                       {section.content || "—"}
                     </p>
-                  )}
+                    <div className="mt-6">
+                      <VoiceFeedback />
+                    </div>
+                  </div>
+                );
+              }
 
-                  <div className="mt-6">
-                    <VoiceFeedback />
+              return (
+                <div key={section.id} className="space-y-5">
+                  <h2 className="text-2xl font-bold text-[#2a2118] px-2">
+                    {section.title}
+                  </h2>
+                  {questions.map((q, idx) => (
+                    <div key={idx} className="card p-6">
+                      <p className="text-lg font-semibold leading-relaxed text-[#2a2118]">
+                        {q}
+                      </p>
+                      <label className="mt-4 block text-sm font-medium text-[#5f5246]">
+                        Your answer
+                        <textarea
+                          name={`followup-${idx}`}
+                          placeholder="Type your answer here..."
+                          className="mt-2 min-h-24 w-full rounded-2xl border border-[#e8dccd] bg-[#fffaf2] p-4 text-base text-[#2a2118] outline-none"
+                        />
+                      </label>
+                    </div>
+                  ))}
+                  {opsNotes && (
+                    <div className="rounded-2xl border border-[#e8dccd] bg-[#fffaf2]/80 p-5">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[#9a7b52]">
+                        Team notes
+                      </p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#5f5246]">
+                        {opsNotes}
+                      </p>
+                    </div>
+                  )}
+                  <div className="card p-6">
+                    <h3 className="text-lg font-bold text-[#2a2118]">
+                      Voice reply
+                    </h3>
+                    <div className="mt-4">
+                      <VoiceFeedback />
+                    </div>
                   </div>
                 </div>
               );

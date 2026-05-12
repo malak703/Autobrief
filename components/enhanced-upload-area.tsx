@@ -6,6 +6,8 @@ import { UploadCloud, Mic, Image, MessageSquare, Send, FileText, X } from "lucid
 import { createBriefFromUpload } from "@/app/actions/briefs";
 import {
   normalizeIntakeFromFiles,
+  resolveZipImagePreviewBlobUrls,
+  type NormalizedMediaEntry,
   type NormalizedTextEntry,
 } from "@/lib/intake-parser";
 import { transcribeVoiceRemote, extractImageRemote } from "@/lib/extract-service";
@@ -18,6 +20,9 @@ export function EnhancedUploadArea({ clientId }: { clientId: string }) {
   const [pastedText, setPastedText] = useState("");
   const [previewTexts, setPreviewTexts] = useState<NormalizedTextEntry[]>([]);
   const [selectedIndexes, setSelectedIndexes] = useState<number[]>([]);
+  const [previewChatImages, setPreviewChatImages] = useState<NormalizedMediaEntry[]>([]);
+  const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
+  const [selectedImageNames, setSelectedImageNames] = useState<string[]>([]);
   const [rangeStart, setRangeStart] = useState("");
   const [rangeEnd, setRangeEnd] = useState("");
   const [extractStatus, setExtractStatus] = useState<"checking" | "ok" | "error">("checking");
@@ -61,7 +66,10 @@ export function EnhancedUploadArea({ clientId }: { clientId: string }) {
       formData.set("clientId", clientId);
       formData.set("pastedText", pastedText);
       formData.set("selectedTextIndexes", JSON.stringify(selectedIndexes));
-      
+      if (previewChatImages.length > 0) {
+        formData.set("selectedImageFileNames", JSON.stringify(selectedImageNames));
+      }
+
       // Add all files from all sections
       [...files, ...voiceFiles, ...imageFiles].forEach((file) => {
         formData.append("assets", file);
@@ -77,13 +85,27 @@ export function EnhancedUploadArea({ clientId }: { clientId: string }) {
   }
 
   async function rebuildPreview(nextFiles: File[], nextPastedText: string) {
+    setImagePreviewUrls((prev) => {
+      for (const u of prev) {
+        if (u) URL.revokeObjectURL(u);
+      }
+      return [];
+    });
     try {
       const parsed = await normalizeIntakeFromFiles(nextFiles, nextPastedText);
       setPreviewTexts(parsed.texts);
       setSelectedIndexes(parsed.texts.map((_, idx) => idx));
+      setPreviewChatImages(parsed.images);
+      const names = parsed.images.map((img) => img.fileName.toLowerCase());
+      setSelectedImageNames(names);
+      const urls = await resolveZipImagePreviewBlobUrls(nextFiles, parsed.images);
+      setImagePreviewUrls(urls);
     } catch {
       setPreviewTexts([]);
       setSelectedIndexes([]);
+      setPreviewChatImages([]);
+      setSelectedImageNames([]);
+      setImagePreviewUrls([]);
     }
   }
 
@@ -305,6 +327,90 @@ export function EnhancedUploadArea({ clientId }: { clientId: string }) {
             </p>
           )}
         </div>
+
+        <div className="mt-6 rounded-2xl border border-[#e8dccd] bg-[#fffaf2] p-4">
+          <p className="text-sm font-semibold text-[#5f5246]">
+            Images from this export (optional)
+          </p>
+          <p className="mt-1 text-xs text-[#7b6f63]">
+            For WhatsApp/Telegram zips, pick which images go into the brief (for example skip pure
+            inspiration). Files you add under Screenshots and Images below are always included.
+          </p>
+          {previewChatImages.length > 0 ? (
+            <div className="mt-3">
+              <div className="mb-3 flex flex-wrap items-center gap-3 text-sm">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() =>
+                    setSelectedImageNames(previewChatImages.map((img) => img.fileName.toLowerCase()))
+                  }
+                >
+                  Select all images
+                </button>
+                <button type="button" className="btn-secondary" onClick={() => setSelectedImageNames([])}>
+                  Clear all images
+                </button>
+                <span className="text-[#7b6f63]">
+                  {selectedImageNames.length} / {previewChatImages.length} selected
+                </span>
+              </div>
+              <div className="grid max-h-96 grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3 md:grid-cols-4">
+                {previewChatImages.map((img, idx) => {
+                  const key = img.fileName.toLowerCase();
+                  const checked = selectedImageNames.includes(key);
+                  const previewUrl = imagePreviewUrls[idx];
+                  return (
+                    <label
+                      key={`${key}-${idx}`}
+                      className={`flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-white ${
+                        checked ? "border-[#9a7b52] ring-2 ring-[#d4c4a8]" : "border-[#eadfce]"
+                      }`}
+                    >
+                      <div className="relative aspect-square bg-[#f5efe6]">
+                        {previewUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={previewUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center p-2 text-center text-xs text-[#7b6f63]">
+                            Preview unavailable
+                          </div>
+                        )}
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            setSelectedImageNames((prev) =>
+                              checked ? prev.filter((k) => k !== key) : [...prev, key]
+                            );
+                          }}
+                          className="absolute left-2 top-2 h-4 w-4 rounded border-[#c4b5a4]"
+                        />
+                      </div>
+                      <div className="border-t border-[#f1e6d6] p-2">
+                        <p className="truncate text-xs font-medium text-[#2a2118]" title={img.fileName}>
+                          {img.fileName}
+                        </p>
+                        {img.from && (
+                          <p className="truncate text-xs text-[#7b6f63]">From {img.from}</p>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-[#7b6f63]">
+              No images detected in this export yet. They appear here when the chat references
+              image files inside a .zip.
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Voice and Image Sections */}
@@ -453,6 +559,14 @@ export function EnhancedUploadArea({ clientId }: { clientId: string }) {
             setSelectedIndexes([]);
             setRangeStart("");
             setRangeEnd("");
+            setPreviewChatImages([]);
+            setSelectedImageNames([]);
+            setImagePreviewUrls((prev) => {
+              for (const u of prev) {
+                if (u) URL.revokeObjectURL(u);
+              }
+              return [];
+            });
             setVoiceFiles([]);
             setImageFiles([]);
             setVoiceExtractedText("");
