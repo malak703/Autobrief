@@ -2,6 +2,10 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { updateBriefSection } from "@/app/actions/briefs";
+import {
+  joinFollowupQuestionsField,
+  splitFollowupQuestionsField,
+} from "@/lib/brief-helpers";
 import type { BriefSection } from "@/lib/types";
 
 export function SectionCard({
@@ -12,19 +16,42 @@ export function SectionCard({
   section: BriefSection;
 }) {
   const [content, setContent] = useState(section.content);
+  const [followupMode, setFollowupMode] = useState<"single" | "multi">("single");
+  const [followupQuestions, setFollowupQuestions] = useState<string[]>([]);
+  const [followupOps, setFollowupOps] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    setContent(section.content);
-  }, [section.content]);
+    if (section.id !== "followup") {
+      setFollowupMode("single");
+      setContent(section.content);
+      return;
+    }
+    const parsed = splitFollowupQuestionsField(section.content);
+    if (parsed.questions.length > 0) {
+      setFollowupMode("multi");
+      setFollowupQuestions(parsed.questions);
+      setFollowupOps(parsed.opsNotes ?? "");
+    } else {
+      setFollowupMode("single");
+      setContent(section.content);
+    }
+  }, [section.content, section.id]);
+
+  function payloadForSave(): string {
+    if (section.id === "followup" && followupMode === "multi") {
+      return joinFollowupQuestionsField(followupQuestions, followupOps || null);
+    }
+    return content;
+  }
 
   function save() {
     setErrorMsg(null);
     setSaveState("saving");
     startTransition(async () => {
-      const res = await updateBriefSection(briefId, section.id, content);
+      const res = await updateBriefSection(briefId, section.id, payloadForSave());
       if (!res.ok) {
         setSaveState("error");
         setErrorMsg(res.error);
@@ -45,11 +72,46 @@ export function SectionCard({
         </span>
       </div>
 
-      <textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        className="min-h-32 w-full rounded-2xl border border-[#e8dccd] bg-[#fffaf2] p-4 text-[#2a2118] outline-none"
-      />
+      {section.id === "followup" && followupMode === "multi" ? (
+        <div className="space-y-5">
+          {followupQuestions.map((_, idx) => (
+            <div
+              key={idx}
+              className="rounded-2xl border border-[#e8dccd] bg-[#fffaf2]/80 p-4"
+            >
+              <label className="block text-sm font-medium text-[#5f5246]">
+                Question {idx + 1}
+                <textarea
+                  value={followupQuestions[idx]}
+                  onChange={(e) => {
+                    const next = [...followupQuestions];
+                    next[idx] = e.target.value;
+                    setFollowupQuestions(next);
+                  }}
+                  className="mt-2 min-h-24 w-full rounded-2xl border border-[#e8dccd] bg-white p-4 text-base leading-relaxed text-[#2a2118] outline-none"
+                />
+              </label>
+            </div>
+          ))}
+          <div className="rounded-2xl border border-[#e8dccd] bg-[#fbf3e8] p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#9a7b52]">
+              Team / pipeline notes
+            </p>
+            <textarea
+              value={followupOps}
+              onChange={(e) => setFollowupOps(e.target.value)}
+              placeholder="Internal notes (saved after --- in the brief field)"
+              className="mt-3 min-h-20 w-full rounded-2xl border border-[#e8dccd] bg-white p-4 text-sm text-[#2a2118] outline-none"
+            />
+          </div>
+        </div>
+      ) : (
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          className="min-h-32 w-full rounded-2xl border border-[#e8dccd] bg-[#fffaf2] p-4 text-[#2a2118] outline-none"
+        />
+      )}
 
       {section.clientComment && (
         <div className="mt-4 rounded-2xl border border-[#efc9c2] bg-[#fff1ef] p-4">
