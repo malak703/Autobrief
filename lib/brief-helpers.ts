@@ -77,17 +77,32 @@ export function parseProjectBriefIntoSections(full: string): {
     return lines.slice(1).join("\n").trim();
   };
 
-  const blocks = text
-    .split(/\n(?=\d+\.\s)/)
+  let blocks = text
+    .split(/###+/)
     .map((b) => b.trim())
     .filter(Boolean);
 
-  for (const block of blocks) {
-    if (/^1\.\s/.test(block)) empty.summary = stripTitleLine(block) || block;
-    else if (/^2\.\s/.test(block)) empty.goals = stripTitleLine(block) || block;
-    else if (/^3\.\s/.test(block)) empty.gaps = stripTitleLine(block) || block;
-    else if (/^4\.\s/.test(block))
-      empty.followup_questions = stripTitleLine(block) || block;
+  if (blocks.length === 1 && !full.includes("###")) {
+    blocks = text
+      .split(/\n(?=\d+\.\s)/)
+      .map((b) => b.trim())
+      .filter(Boolean);
+  }
+
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    const lower = block.toLowerCase();
+    
+    if (/^1\.\s/.test(block) || lower.includes("what the client wants")) empty.summary = stripTitleLine(block) || block;
+    else if (/^2\.\s/.test(block) || lower.includes("goals & success criteria") || lower.includes("goals and success")) empty.goals = stripTitleLine(block) || block;
+    else if (/^3\.\s/.test(block) || lower.includes("gaps & unclear points") || lower.includes("gaps and unclear")) empty.gaps = stripTitleLine(block) || block;
+    else if (/^4\.\s/.test(block) || lower.includes("follow-up questions") || lower.includes("follow up questions")) empty.followup_questions = stripTitleLine(block) || block;
+    else {
+      if (i === 0 && !empty.summary) empty.summary = stripTitleLine(block) || block;
+      else if (i === 1 && !empty.goals) empty.goals = stripTitleLine(block) || block;
+      else if (i === 2 && !empty.gaps) empty.gaps = stripTitleLine(block) || block;
+      else if (i === 3 && !empty.followup_questions) empty.followup_questions = stripTitleLine(block) || block;
+    }
   }
 
   if (!empty.summary && blocks.length === 1) {

@@ -13,6 +13,8 @@ from typing import List
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, UploadFile, HTTPException, Body
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from groq import Groq
 from PIL import Image
 from pydantic import AliasChoices, BaseModel, Field
@@ -56,11 +58,21 @@ PROJECT_BRIEF_SYSTEM_PROMPT = (
     "You are a professional project brief writer.\n"
     "Below is a list of extracted client requirements. \n"
     "Turn this into a structured project brief with these \n"
-    "exact 4 sections:\n\n"
-    "1. What the client wants — plain summary, 2-3 sentences max\n"
-    "2. Goals & success criteria — what does done look like\n"
-    "3. Gaps & unclear points — what's missing or contradictory\n"
-    "4. Follow-up questions — specific questions to fill the gaps\n\n"
+    "exact 4 sections. **CRITICAL: You must separate each section with exactly '###' on its own line.**\n\n"
+    "Example format:\n"
+    "###\n"
+    "1. What the client wants\n"
+    "(content here)\n"
+    "###\n"
+    "2. Goals & success criteria\n"
+    "(content here)\n"
+    "###\n"
+    "3. Gaps & unclear points\n"
+    "(content here)\n"
+    "###\n"
+    "4. Follow-up questions\n"
+    "**CRITICAL: You must separate each individual follow-up question with exactly '@@@' on its own line.**\n"
+    "(Example: Question 1\n@@@\nQuestion 2)\n\n"
     "Be specific. No generic statements. If something isn't in \n"
     "the input, don't invent it — flag it as a gap instead."
 )
@@ -84,6 +96,15 @@ app = FastAPI(
     title="FastAPI Service",
     description="A FastAPI service for processing various tasks",
     version="1.0.0"
+)
+
+# Add CORS middleware to allow Next.js app to connect
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

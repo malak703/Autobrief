@@ -93,33 +93,84 @@ export default async function PublicBriefPage({
         )}
 
         <div className="mt-8 space-y-5">
-          {sections.map((section) => (
-            <div key={section.id} className="card p-6">
-              <h2 className="text-2xl font-bold text-[#2a2118]">
-                {section.title}
-              </h2>
+          {sections.map((section) => {
+            if (section.id === "followup") {
+              const content = section.content || "";
+              const splitChar = content.includes("@@@") ? "@@@" : "\n";
+              
+              const questions = content
+                .split(splitChar)
+                .map((q) => q.trim())
+                .filter(
+                  (q) =>
+                    q.length > 0 &&
+                    !q.toLowerCase().startsWith("here are") &&
+                    !q.toLowerCase().startsWith("follow-up") &&
+                    !q.toLowerCase().startsWith("follow up")
+                );
 
-              <p className="mt-4 leading-8 text-[#5f5246]">
-                {section.content || "—"}
-              </p>
+              return (
+                <div key={section.id} className="card p-6">
+                  <h2 className="text-2xl font-bold text-[#2a2118]">
+                    {section.title}
+                  </h2>
 
-              <div className="mt-6 flex flex-wrap gap-3">
-                <button type="button" className="btn-primary">
-                  ✓ Looks right
-                </button>
-                <button type="button" className="btn-secondary">
-                  ✕ Edit this
-                </button>
+                  {questions.length > 0 ? (
+                    <div className="mt-6 space-y-6">
+                      {questions.map((q, idx) => (
+                        <div
+                          key={idx}
+                          className="rounded-xl border border-[#e8dccd] bg-[#fffaf2] p-5"
+                        >
+                          <p className="font-medium text-[#2a2118]">{q}</p>
+                          <textarea
+                            placeholder="Type your answer here..."
+                            className="mt-3 min-h-24 w-full rounded-xl border border-[#e8dccd] bg-white p-4 outline-none"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-4 leading-8 text-[#5f5246] whitespace-pre-wrap">
+                      {section.content || "—"}
+                    </p>
+                  )}
+
+                  <div className="mt-6">
+                    <VoiceFeedback />
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div key={section.id} className="card p-6">
+                <h2 className="text-2xl font-bold text-[#2a2118]">
+                  {section.title}
+                </h2>
+
+                <p className="mt-4 leading-8 text-[#5f5246] whitespace-pre-wrap">
+                  {section.content || "—"}
+                </p>
+
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <button type="button" className="btn-primary">
+                    ✓ Looks right
+                  </button>
+                  <button type="button" className="btn-secondary">
+                    ✕ Edit this
+                  </button>
+                </div>
+
+                <textarea
+                  placeholder="Write what needs to change..."
+                  className="mt-5 min-h-28 w-full rounded-2xl border border-[#e8dccd] bg-[#fffaf2] p-4 outline-none"
+                />
+
+                <VoiceFeedback />
               </div>
-
-              <textarea
-                placeholder="Write what needs to change..."
-                className="mt-5 min-h-28 w-full rounded-2xl border border-[#e8dccd] bg-[#fffaf2] p-4 outline-none"
-              />
-
-              <VoiceFeedback />
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="mt-8 flex justify-end">
