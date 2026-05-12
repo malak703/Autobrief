@@ -2,12 +2,12 @@ import {
   Bell,
   Building2,
   Database,
-  KeyRound,
   Mail,
   Palette,
   Shield,
   UserRound,
 } from "lucide-react";
+import { ThemeCustomizer } from "@/components/theme-customizer";
 
 const settingsSections = [
   {
@@ -21,12 +21,6 @@ const settingsSections = [
     description: "Control what admins and employees can view or edit.",
     icon: Shield,
     items: ["Admin access", "Employee access", "Client public access"],
-  },
-  {
-    title: "AI processing",
-    description: "Configure filtering, structuring, and anti-hallucination rules.",
-    icon: Database,
-    items: ["Stage 1 noise filtering", "Stage 2 brief structure", "Gap detection"],
   },
   {
     title: "Email & client links",
@@ -49,7 +43,7 @@ export default function SettingsPage() {
         </h1>
 
         <p className="mt-3 max-w-2xl text-lg text-[#7b6f63]">
-          Manage company settings, team permissions, AI behavior, client links,
+          Manage company settings, team permissions, client links,
           and integrations.
         </p>
       </div>
@@ -118,31 +112,7 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <div className="card p-6">
-          <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f1e2cc] text-[#5b3f2a]">
-            <Palette size={26} />
-          </div>
-
-          <h2 className="text-2xl font-bold text-[#2a2118]">
-            Appearance
-          </h2>
-
-          <p className="mt-2 text-[#7b6f63]">
-            Current theme is warm beige minimal. This keeps the app calm,
-            professional, and easy to scan.
-          </p>
-
-          <div className="mt-6 grid grid-cols-4 gap-3">
-            <div className="h-12 rounded-2xl bg-[#f6efe4]" />
-            <div className="h-12 rounded-2xl bg-[#fffaf2]" />
-            <div className="h-12 rounded-2xl bg-[#5b3f2a]" />
-            <div className="h-12 rounded-2xl bg-[#c99a4a]" />
-          </div>
-
-          <button className="btn-secondary mt-6 w-full">
-            Customize theme
-          </button>
-        </div>
+        <ThemeCustomizer />
       </div>
 
       <div className="mb-8 grid grid-cols-1 gap-6 xl:grid-cols-2">
@@ -185,42 +155,6 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <div className="card p-6">
-          <div className="mb-5 flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#f1e2cc] text-[#5b3f2a]">
-              <KeyRound size={23} />
-            </div>
-
-            <div>
-              <h2 className="text-2xl font-bold text-[#2a2118]">
-                API keys
-              </h2>
-              <p className="text-[#7b6f63]">
-                Connect Gemini, Groq, Supabase, and Resend.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {["Gemini API Key", "Groq API Key", "Supabase URL", "Resend API Key"].map(
-              (keyName) => (
-                <div key={keyName}>
-                  <label className="mb-2 block text-sm font-semibold text-[#5f5246]">
-                    {keyName}
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="••••••••••••••••"
-                    className="w-full rounded-2xl border border-[#e8dccd] bg-[#fffaf2] px-4 py-3 text-[#2a2118] outline-none"
-                  />
-                </div>
-              )
-            )}
-          </div>
-
-          <button className="btn-primary mt-6">Save integrations</button>
-        </div>
-
         <div className="card p-6">
           <div className="mb-5 flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#f1e2cc] text-[#5b3f2a]">
