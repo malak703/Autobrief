@@ -19,12 +19,12 @@ export function ProposalView({
   return (
     <div>
       {/* Toggle between proposal and sections */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-[#2a2118]">
+          <h2 className="text-xl font-bold text-[#2a2118] md:text-2xl">
             {showSections ? "Brief Sections" : "Final Proposal"}
           </h2>
-          <p className="mt-1 text-sm text-[#7b6f63]">
+          <p className="mt-1 text-sm text-[#7b6f63] md:text-base">
             {showSections
               ? "Viewing the original brief sections."
               : "The client has generated and confirmed this proposal."}
@@ -32,7 +32,7 @@ export function ProposalView({
         </div>
         <button
           type="button"
-          className="btn-secondary"
+          className="btn-secondary w-full sm:w-auto"
           onClick={() => setShowSections(!showSections)}
         >
           {showSections ? "View Proposal" : "View Sections"}
@@ -46,9 +46,9 @@ export function ProposalView({
           ))}
         </div>
       ) : (
-        <div className="card p-8">
-          <div className="bg-white rounded-lg p-8 border border-[#e8dccd]">
-            <div className="prose prose-lg prose-brown max-w-none">
+        <div className="card p-4 sm:p-8">
+          <div className="bg-white rounded-lg p-4 sm:p-8 border border-[#e8dccd] overflow-x-auto">
+            <div className="prose sm:prose-lg prose-brown max-w-none break-words">
               <ReactMarkdown>{proposal}</ReactMarkdown>
             </div>
           </div>

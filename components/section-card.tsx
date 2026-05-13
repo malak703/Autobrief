@@ -64,8 +64,8 @@ export function SectionCard({
 
   return (
     <div className="card p-6">
-      <div className="mb-4 flex items-start justify-between gap-4">
-        <h3 className="text-2xl font-bold text-[#2a2118]">{section.title}</h3>
+      <div className="mb-4 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h3 className="text-xl font-bold text-[#2a2118] md:text-2xl">{section.title}</h3>
 
         <span className="rounded-full bg-[#f1e2cc] px-3 py-1 text-xs font-semibold text-[#5b3f2a]">
           {section.status.replace("_", " ")}

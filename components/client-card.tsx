@@ -27,7 +27,7 @@ export function ClientCard({
         <p className="mt-1 text-sm text-[#7b6f63]">{client.company}</p>
       )}
 
-      <div className="mt-8 flex items-center justify-between text-sm text-[#7b6f63]">
+      <div className="mt-8 flex flex-col items-start gap-2 text-sm text-[#7b6f63] sm:flex-row sm:items-center sm:justify-between">
         <span>
           {activeBriefs} active brief{activeBriefs === 1 ? "" : "s"}
         </span>

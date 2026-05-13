@@ -79,11 +79,11 @@ export function SendClientLink({
       {notice && (
         <p className="text-left text-sm text-[#2d6a4f] sm:text-right">{notice}</p>
       )}
-      <div className="flex flex-wrap justify-end gap-2">
-        <button type="button" className="btn-secondary" onClick={copyOnly} disabled={isPending}>
+      <div className="flex w-full flex-col sm:flex-row sm:flex-wrap justify-end gap-2">
+        <button type="button" className="btn-secondary w-full sm:w-auto" onClick={copyOnly} disabled={isPending}>
           Copy link
         </button>
-        <button type="button" className="btn-primary" onClick={sendToClient} disabled={isPending}>
+        <button type="button" className="btn-primary w-full sm:w-auto" onClick={sendToClient} disabled={isPending}>
           {isPending ? "Working…" : status === "sent" ? "Open client link again" : "Send to client"}
         </button>
       </div>

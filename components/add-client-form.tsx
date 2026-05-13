@@ -39,10 +39,10 @@ export function AddClientForm() {
   }
 
   return (
-    <div>
+    <div className="w-full md:w-auto md:min-w-[320px]">
       <button
         type="button"
-        className="btn-primary"
+        className="btn-primary w-full md:w-auto"
         onClick={() => {
           setOpen((v) => !v);
           setError(null);
@@ -54,7 +54,7 @@ export function AddClientForm() {
       {open && (
         <form
           onSubmit={onSubmit}
-          className="card mt-6 space-y-4 p-6"
+          className="card mt-6 w-full space-y-4 p-4 sm:p-6"
         >
           <h2 className="text-lg font-bold text-[#2a2118]">New client</h2>
 

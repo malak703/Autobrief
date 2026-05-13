@@ -291,62 +291,66 @@ export function InternalCalendar({ deadlines }: { deadlines: Deadline[] }) {
           )}
         </div>
 
-        <div className="grid grid-cols-7 gap-2 text-center text-sm font-bold text-[#7b6f63]">
-          <div>Sun</div>
-          <div>Mon</div>
-          <div>Tue</div>
-          <div>Wed</div>
-          <div>Thu</div>
-          <div>Fri</div>
-          <div>Sat</div>
-        </div>
+        <div className="overflow-x-auto pb-4">
+          <div className="min-w-[600px]">
+            <div className="grid grid-cols-7 gap-2 text-center text-sm font-bold text-[#7b6f63]">
+              <div>Sun</div>
+              <div>Mon</div>
+              <div>Tue</div>
+              <div>Wed</div>
+              <div>Thu</div>
+              <div>Fri</div>
+              <div>Sat</div>
+            </div>
 
-        <div className="mt-3 grid grid-cols-7 gap-2">
-          {calendarDays.map((day, index) =>
-            day === null ? (
-              <div key={`empty-${index}`} className="min-h-28 rounded-2xl" />
-            ) : (
-              <div
-                key={day.dateString}
-                className={`min-h-28 rounded-2xl border p-3 transition hover:-translate-y-1 ${
-                  day.dateString === today
-                    ? "border-[var(--color-primary)] bg-[var(--color-surface)]"
-                    : "border-[var(--color-border)] bg-[var(--color-surface-soft)]"
-                }`}
-              >
-                <p className="mb-2 text-sm font-bold text-[#2a2118]">
-                  {day.day}
-                </p>
-
-                <div className="space-y-1">
-                  {day.deadlines.slice(0, 2).map((deadline) => {
-                    const isPast =
-                      deadline.parsed_date && deadline.parsed_date < today;
-
-                    return (
-                      <div
-                        key={deadline.id}
-                        className={`rounded-xl px-2 py-1 text-left text-xs font-semibold ${
-                          isPast
-                            ? "bg-[#d8c7b5] text-[#5f5246]"
-                            : "bg-[var(--color-primary)] text-white"
-                        }`}
-                        title={deadline.extracted_text ?? ""}
-                      >
-                        {deadline.extracted_text}
-                      </div>
-                    );
-                  })}
-
-                  {day.deadlines.length > 2 && (
-                    <p className="text-xs font-semibold text-[#9a7b52]">
-                      +{day.deadlines.length - 2} more
+            <div className="mt-3 grid grid-cols-7 gap-2">
+              {calendarDays.map((day, index) =>
+                day === null ? (
+                  <div key={`empty-${index}`} className="min-h-28 rounded-2xl" />
+                ) : (
+                  <div
+                    key={day.dateString}
+                    className={`min-h-28 rounded-2xl border p-2 transition hover:-translate-y-1 sm:p-3 ${
+                      day.dateString === today
+                        ? "border-[var(--color-primary)] bg-[var(--color-surface)]"
+                        : "border-[var(--color-border)] bg-[var(--color-surface-soft)]"
+                    }`}
+                  >
+                    <p className="mb-2 text-sm font-bold text-[#2a2118]">
+                      {day.day}
                     </p>
-                  )}
-                </div>
-              </div>
-            )
-          )}
+
+                    <div className="space-y-1">
+                      {day.deadlines.slice(0, 2).map((deadline) => {
+                        const isPast =
+                          deadline.parsed_date && deadline.parsed_date < today;
+
+                        return (
+                          <div
+                            key={deadline.id}
+                            className={`truncate rounded-xl px-2 py-1 text-left text-xs font-semibold ${
+                              isPast
+                                ? "bg-[#d8c7b5] text-[#5f5246]"
+                                : "bg-[var(--color-primary)] text-white"
+                            }`}
+                            title={deadline.extracted_text ?? ""}
+                          >
+                            {deadline.extracted_text}
+                          </div>
+                        );
+                      })}
+
+                      {day.deadlines.length > 2 && (
+                        <p className="text-xs font-semibold text-[#9a7b52]">
+                          +{day.deadlines.length - 2} more
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          </div>
         </div>
       </div>
 

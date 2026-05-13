@@ -547,10 +547,10 @@ export function EnhancedUploadArea({ clientId }: { clientId: string }) {
       )}
 
       {/* Submit Button */}
-      <div className="flex justify-end gap-3">
+      <div className="flex w-full flex-col justify-end gap-3 sm:flex-row">
         <button
           type="button"
-          className="btn-secondary"
+          className="btn-secondary w-full sm:w-auto"
           onClick={() => {
             setFiles([]);
             setPastedText("");
@@ -578,7 +578,7 @@ export function EnhancedUploadArea({ clientId }: { clientId: string }) {
         </button>
         <button
           onClick={submitForm}
-          className="btn-primary"
+          className="btn-primary w-full sm:w-auto"
           disabled={isPending}
         >
           <Send className="mr-2 inline" size={16} />
