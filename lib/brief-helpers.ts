@@ -9,10 +9,72 @@ const SECTION_META: { id: BriefSection["id"]; title: string }[] = [
   { id: "followup", title: "Suggested follow-up questions" },
 ];
 
-export function briefCardTitle(brief: Brief): string {
+export function briefCardTitle(brief: Pick<Brief, "summary">): string {
   const s = brief.summary?.trim();
-  if (s) return s.length > 72 ? `${s.slice(0, 72)}…` : s;
-  return "Brief";
+  if (!s) return "Brief";
+  const { clientTitle, body } = extractBriefTitleLine(s);
+  const display = (clientTitle || body).trim();
+  if (!display) return "Brief";
+  return display.length > 72 ? `${display.slice(0, 72)}…` : display;
+}
+
+/** Headline for the public client review page (reads optional `TITLE:` prefix in `summary`). */
+export function clientFacingBriefHeadline(brief: Pick<Brief, "summary">): string {
+  const s = brief.summary?.trim() ?? "";
+  if (!s) return "Your project brief";
+  const { clientTitle, body } = extractBriefTitleLine(s);
+  if (clientTitle) {
+    return clientTitle.length > 120 ? `${clientTitle.slice(0, 117)}…` : clientTitle;
+  }
+  const display = body.trim();
+  if (!display) return "Your project brief";
+  if (display.length <= 100) return display;
+  const cut = display.slice(0, 100);
+  const sp = cut.lastIndexOf(" ");
+  return `${sp > 35 ? cut.slice(0, sp) : cut}…`;
+}
+
+/** Stored `summary` may start with `TITLE: …`; strip that for section bodies (dashboard + client). */
+export function summaryTextForSections(summary: string | null | undefined): string {
+  const s = summary?.trim() ?? "";
+  if (!s) return "";
+  return extractBriefTitleLine(s).body.trim();
+}
+
+/** Remove optional ``` fenced block wrapping model output. */
+export function stripLeadingMarkdownFence(text: string): string {
+  let s = text.trim();
+  if (!s.startsWith("```")) return s;
+  const lines = s.split("\n");
+  if (lines.length < 2) return s;
+  lines.shift();
+  while (lines.length && lines[lines.length - 1].trim().startsWith("```")) {
+    lines.pop();
+  }
+  return lines.join("\n").trim();
+}
+
+/**
+ * First non-empty line may be `TITLE: …` from the project-brief model; strip it before section parsing.
+ */
+export function extractBriefTitleLine(full: string): { clientTitle: string | null; body: string } {
+  const t = stripLeadingMarkdownFence(full).trim();
+  const lines = t.split(/\r?\n/).map((l) => l.trim());
+  const nonEmpty = lines.filter((l) => l.length > 0);
+  if (nonEmpty.length === 0) return { clientTitle: null, body: t };
+  const m = nonEmpty[0].match(/^TITLE:\s*(.+)$/i);
+  if (!m) return { clientTitle: null, body: t };
+  const rawTitle = m[1].replace(/^["']|["']$/g, "").trim();
+  const clientTitle = rawTitle ? rawTitle.slice(0, 200) : null;
+  const titleIdx = lines.findIndex((l) => l.length > 0);
+  const afterTitle = lines.slice(titleIdx + 1).join("\n").trim();
+  if (afterTitle.length > 0) {
+    return { clientTitle, body: afterTitle };
+  }
+  const first = nonEmpty[0];
+  const pos = t.indexOf(first);
+  const bodyFromRaw = pos >= 0 ? t.slice(pos + first.length).trim() : t;
+  return { clientTitle, body: bodyFromRaw };
 }
 
 export function formatRelativeTime(iso: string): string {
@@ -38,8 +100,9 @@ export function gapsToMissingList(gaps: string | null): string[] {
 }
 
 export function briefToSections(brief: Brief): BriefSection[] {
+  const summaryBody = summaryTextForSections(brief.summary);
   const contentMap = {
-    summary: brief.summary,
+    summary: summaryBody,
     goals: brief.goals,
     gaps: brief.gaps,
     followup: brief.followup_questions,
