@@ -61,9 +61,14 @@ WORK_FILTER_SYSTEM_PROMPT = (
 PROJECT_BRIEF_SYSTEM_PROMPT = (
     "You are a professional project brief writer.\n"
     "Below is a list of extracted client requirements. \n"
+    "Your very first line (before any ###) must be exactly one line in this format:\n"
+    "TITLE: <short compelling headline for the client, Title Case, max 10 words, no quotation marks>\n"
+    "Leave one blank line after that line, then output the structured brief.\n"
     "Turn this into a structured project brief with these \n"
     "exact 4 sections. **CRITICAL: You must separate each section with exactly '###' on its own line.**\n\n"
     "Example format:\n"
+    "TITLE: Spring Campaign Refresh For Northwind\n"
+    "\n"
     "###\n"
     "1. What the client wants\n"
     "(content here)\n"
@@ -229,6 +234,7 @@ async def health_check():
             "/filter-and-generate-brief",
             "/generate-project-brief",
             "/extract-deadlines",
+            "/process-client-feedback",
             "/generate-meeting-summary",
             "/process-meeting",
         ],

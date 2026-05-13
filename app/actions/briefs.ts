@@ -13,7 +13,10 @@ import {
   filterAndGenerateBriefRemote,
   transcribeVoiceRemote,
 } from "@/lib/extract-service";
-import { parseProjectBriefIntoSections } from "@/lib/brief-helpers";
+import {
+  extractBriefTitleLine,
+  parseProjectBriefIntoSections,
+} from "@/lib/brief-helpers";
 import type { BriefSection } from "@/lib/types";
 import JSZip from "jszip";
 
@@ -495,11 +498,13 @@ export async function createBriefFromUpload(
     );
   } else {
     filtered_content = pipelineResult.filteredText.trim() || null;
-    const parsed = parseProjectBriefIntoSections(pipelineResult.projectBrief);
-    summary =
-      parsed.summary?.trim() ||
-      pipelineResult.projectBrief.trim().slice(0, 280) ||
-      summary;
+    const { clientTitle, body } = extractBriefTitleLine(pipelineResult.projectBrief);
+    const parsed = parseProjectBriefIntoSections(body);
+    const summaryBody =
+      parsed.summary?.trim() || body.trim().slice(0, 280) || summary;
+    summary = clientTitle
+      ? `TITLE: ${clientTitle}\n\n${summaryBody}`
+      : summaryBody;
     goals = parsed.goals?.trim() || null;
     gaps = parsed.gaps?.trim() || null;
     const followParts = [
