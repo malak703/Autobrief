@@ -25,13 +25,20 @@ export default async function BriefDetailsPage({
   const { briefId } = await params;
   const supabase = await createServerSupabase();
 
-  const { data: brief } = await supabase
-    .from("briefs")
-    .select("*")
-    .eq("id", briefId)
-    .maybeSingle();
+  const { data: owner } = await supabase.from("business_owners").select("id").maybeSingle();
 
-    
+  const { data: brief } = owner?.id
+    ? await supabase
+        .from("briefs")
+        .select("*")
+        .eq("id", briefId)
+        .eq("owner_id", owner.id)
+        .maybeSingle()
+    : { data: null };
+
+  if (!brief) {
+    return <p>Brief not found.</p>;
+  }
 
   const completion = brief.completion_score ?? 0;
   const missing = gapsToMissingList(brief.gaps);

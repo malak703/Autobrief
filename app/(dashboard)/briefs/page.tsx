@@ -3,10 +3,15 @@ import { createServerSupabase } from "@/lib/supabase";
 
 export default async function BriefsIndexPage() {
   const supabase = await createServerSupabase();
-  const { data: briefs } = await supabase
-    .from("briefs")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const { data: owner } = await supabase.from("business_owners").select("id").maybeSingle();
+
+  const { data: briefs } = owner?.id 
+    ? await supabase
+        .from("briefs")
+        .select("*")
+        .eq("owner_id", owner.id)
+        .order("created_at", { ascending: false })
+    : { data: [] };
 
   const rows = briefs ?? [];
 

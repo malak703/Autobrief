@@ -9,14 +9,21 @@ export default async function ClientsPage() {
   // Ensure business owner record exists for authenticated users
   await syncBusinessOwnerFromAuth();
 
-  const { data: clients, error: clientsError } = await supabase
-    .from("clients")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const { data: owner } = await supabase.from("business_owners").select("id").maybeSingle();
 
-  const { data: briefLinks, error: briefsCountError } = await supabase
-    .from("briefs")
-    .select("client_id");
+  const [clientsRes, briefsRes] = await Promise.all([
+    owner?.id 
+      ? supabase.from("clients").select("*").eq("owner_id", owner.id).order("created_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
+    owner?.id
+      ? supabase.from("briefs").select("client_id").eq("owner_id", owner.id)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  const clients = clientsRes.data;
+  const clientsError = clientsRes.error;
+  const briefLinks = briefsRes.data;
+  const briefsCountError = briefsRes.error;
 
   const countByClient = new Map<string, number>();
   for (const row of briefLinks ?? []) {

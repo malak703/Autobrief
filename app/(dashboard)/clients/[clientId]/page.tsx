@@ -10,17 +10,19 @@ export default async function ClientDetailsPage({
   const { clientId } = await params;
   const supabase = await createServerSupabase();
 
-  const { data: client } = await supabase
-    .from("clients")
-    .select("*")
-    .eq("id", clientId)
-    .maybeSingle();
+  const { data: owner } = await supabase.from("business_owners").select("id").maybeSingle();
 
-  const { data: clientBriefs } = await supabase
-    .from("briefs")
-    .select("*")
-    .eq("client_id", clientId)
-    .order("created_at", { ascending: false });
+  const [clientRes, briefsRes] = await Promise.all([
+    owner?.id 
+      ? supabase.from("clients").select("*").eq("id", clientId).eq("owner_id", owner.id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    owner?.id
+      ? supabase.from("briefs").select("*").eq("client_id", clientId).eq("owner_id", owner.id).order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const client = clientRes.data;
+  const clientBriefs = briefsRes.data;
 
   if (!client) {
     return <p>Client not found.</p>;

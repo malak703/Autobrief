@@ -9,12 +9,15 @@ export default async function DashboardPage() {
   // Ensure business owner record exists for authenticated users
   await syncBusinessOwnerFromAuth();
 
-  const [{ data: owner }, { data: clientRows }, { data: briefRows }] =
-    await Promise.all([
-      supabase.from("business_owners").select("*").maybeSingle(),
-      supabase.from("clients").select("id"),
-      supabase.from("briefs").select("*").order("created_at", { ascending: false }),
-    ]);
+  const { data: owner } = await supabase.from("business_owners").select("*").maybeSingle();
+
+  const [clientRes, briefRes] = await Promise.all([
+    owner?.id ? supabase.from("clients").select("id").eq("owner_id", owner.id) : Promise.resolve({ data: [] }),
+    owner?.id ? supabase.from("briefs").select("*").eq("owner_id", owner.id).order("created_at", { ascending: false }) : Promise.resolve({ data: [] }),
+  ]);
+
+  const clientRows = clientRes.data;
+  const briefRows = briefRes.data;
 
   const briefs = briefRows ?? [];
   const clientsCount = clientRows?.length ?? 0;
