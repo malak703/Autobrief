@@ -9,8 +9,7 @@ import {
   Users,
   FileText,
   CalendarDays,
-  MessageSquare,
-  Settings,
+  Settings
 } from "lucide-react";
 
 const nav = [
@@ -18,7 +17,6 @@ const nav = [
   { href: "/clients", label: "Clients", icon: Users },
   { href: "/briefs", label: "Briefs", icon: FileText },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/meetings", label: "Meetings", icon: MessageSquare },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
