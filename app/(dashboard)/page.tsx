@@ -28,27 +28,27 @@ export default async function DashboardPage() {
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#9a7b52]">
           Dashboard
         </p>
-        <h1 className="mt-2 text-5xl font-bold tracking-tight text-[#2a2118]">
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#2a2118] md:text-5xl">
           Brief workspace
         </h1>
         {owner?.company_name && (
-          <p className="mt-2 text-lg font-medium text-[#5f5246]">
+          <p className="mt-2 text-base font-medium text-[#5f5246] md:text-lg">
             {owner.company_name}
           </p>
         )}
-        <p className="mt-3 max-w-2xl text-lg text-[#7b6f63]">
+        <p className="mt-3 max-w-2xl text-base text-[#7b6f63] md:text-lg">
           Manage clients, proposals, versions, and client feedback from one calm workspace.
         </p>
       </div>
 
-      <div className="mb-10 grid grid-cols-1 gap-5 md:grid-cols-3">
+      <div className="mb-10 grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3">
         <StatCard label="Clients" value={clientsCount.toString()} />
         <StatCard label="Briefs" value={briefs.length.toString()} />
       </div>
 
-      <div className="mb-5 flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-[#2a2118]">Recent briefs</h2>
-        <button type="button" className="btn-secondary">
+      <div className="mb-5 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-xl font-bold text-[#2a2118] md:text-2xl">Recent briefs</h2>
+        <button type="button" className="btn-secondary w-full sm:w-auto">
           View all
         </button>
       </div>

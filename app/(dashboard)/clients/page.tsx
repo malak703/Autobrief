@@ -59,10 +59,10 @@ export default async function ClientsPage() {
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#9a7b52]">
             Clients
           </p>
-          <h1 className="mt-2 text-5xl font-bold text-[#2a2118]">
+          <h1 className="mt-2 text-3xl font-bold text-[#2a2118] md:text-5xl">
             Client library
           </h1>
-          <p className="mt-3 text-lg text-[#7b6f63]">
+          <p className="mt-3 text-base text-[#7b6f63] md:text-lg">
             Each client has their own page, uploads, proposals, versions, and comments.
           </p>
         </div>

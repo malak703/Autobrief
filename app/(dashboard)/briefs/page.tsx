@@ -21,7 +21,7 @@ export default async function BriefsIndexPage() {
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#9a7b52]">
           Briefs
         </p>
-        <h1 className="mt-2 text-5xl font-bold text-[#2a2118]">All briefs</h1>
+        <h1 className="mt-2 text-3xl font-bold text-[#2a2118] md:text-5xl">All briefs</h1>
       </div>
 
       {rows.length === 0 ? (

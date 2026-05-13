@@ -33,30 +33,30 @@ export default async function ClientDetailsPage({
   return (
     <div>
       <div className="card mb-8 p-8">
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#9a7b52]">
               Client page
             </p>
-            <h1 className="mt-2 text-5xl font-bold text-[#2a2118]">
+            <h1 className="mt-2 text-3xl font-bold text-[#2a2118] md:text-5xl">
               {client.name}
             </h1>
-            <p className="mt-3 text-lg text-[#7b6f63]">
+            <p className="mt-3 text-base text-[#7b6f63] md:text-lg">
               {client.email ?? "No email"} · {client.company ?? "No company"}
             </p>
           </div>
 
-          <Link href={`/clients/${client.id}/upload`} className="btn-primary">
+          <Link href={`/clients/${client.id}/upload`} className="btn-primary w-full text-center sm:w-auto">
             Upload brief for this client
           </Link>
         </div>
       </div>
 
-      <div className="mb-5 flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-[#2a2118]">
+      <div className="mb-5 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-xl font-bold text-[#2a2118] md:text-2xl">
           Briefs & versions
         </h2>
-        <p className="text-[#7b6f63]">
+        <p className="text-sm text-[#7b6f63] md:text-base">
           All proposal versions are saved forever.
         </p>
       </div>

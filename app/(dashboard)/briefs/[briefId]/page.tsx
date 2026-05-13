@@ -53,8 +53,8 @@ export default async function BriefDetailsPage({
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#9a7b52]">
               Brief review
             </p>
-            <h1 className="mt-2 text-5xl font-bold text-[#2a2118]">{briefCardTitle(brief)}</h1>
-            <p className="mt-3 text-lg text-[#7b6f63]">
+            <h1 className="mt-2 text-3xl font-bold text-[#2a2118] md:text-5xl">{briefCardTitle(brief)}</h1>
+            <p className="mt-3 text-base text-[#7b6f63] md:text-lg">
               Version {brief.version} · {brief.status.replace("_", " ")}
             </p>
           </div>
