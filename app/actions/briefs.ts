@@ -628,6 +628,31 @@ export async function updateBriefSection(
     return { ok: false, error: updateError.message };
   }
 
+  // Recalculate completion_score based on all four sections now stored in DB
+  const { data: refreshed } = await supabase
+    .from("briefs")
+    .select("summary, goals, gaps, followup_questions, filtered_content")
+    .eq("id", briefId)
+    .eq("owner_id", owner.id)
+    .maybeSingle();
+
+  if (refreshed) {
+    const hasSection = (v: string | null | undefined) => (v?.trim().length ?? 0) > 10;
+    const sectionScore =
+      (hasSection(refreshed.summary) ? 20 : 0) +
+      (hasSection(refreshed.goals) ? 20 : 0) +
+      (hasSection(refreshed.gaps) ? 20 : 0) +
+      (hasSection(refreshed.followup_questions) ? 20 : 0);
+    const aiBonus = hasSection(refreshed.filtered_content) ? 15 : 0;
+    const newScore = Math.min(95, sectionScore + aiBonus);
+
+    await supabase
+      .from("briefs")
+      .update({ completion_score: newScore })
+      .eq("id", briefId)
+      .eq("owner_id", owner.id);
+  }
+
   revalidatePath(`/briefs/${briefId}`);
   return { ok: true };
 }
