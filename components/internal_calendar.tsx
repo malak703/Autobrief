@@ -7,12 +7,16 @@ import {
   Clock,
   CheckCircle2,
   Trash2,
+  Edit3,
+  Check,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import {
   deleteDeadline,
   toggleDeadlineSubmitted,
+  updateDeadlineName,
 } from "@/app/(dashboard)/calendar/actions";
 
 type Deadline = {
@@ -43,7 +47,10 @@ const months = [
 ];
 
 function toDateOnly(date: Date) {
-  return date.toISOString().split("T")[0];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function getMonthDays(selectedMonth: Date, deadlines: Deadline[]) {
@@ -92,6 +99,8 @@ export function InternalCalendar({ deadlines }: { deadlines: Deadline[] }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [editingDeadlineId, setEditingDeadlineId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
 
   const today = toDateOnly(new Date());
 
@@ -159,15 +168,50 @@ export function InternalCalendar({ deadlines }: { deadlines: Deadline[] }) {
     });
   }
 
+  function startEditingDeadline(deadlineId: string, currentText: string) {
+    setEditingDeadlineId(deadlineId);
+    setEditingText(currentText);
+  }
+
+  function cancelEditingDeadline() {
+    setEditingDeadlineId(null);
+    setEditingText("");
+  }
+
+  function saveDeadlineName(deadlineId: string) {
+    if (!editingText.trim()) return;
+
+    startTransition(() => {
+      void updateDeadlineName(deadlineId, editingText.trim())
+        .then(() => {
+          setEditingDeadlineId(null);
+          setEditingText("");
+          router.refresh();
+        })
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          window.alert(message);
+        });
+    });
+  }
+
+  function handleEditKeyDown(e: React.KeyboardEvent<HTMLInputElement>, deadlineId: string) {
+    if (e.key === "Enter") {
+      saveDeadlineName(deadlineId);
+    } else if (e.key === "Escape") {
+      cancelEditingDeadline();
+    }
+  }
+
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
       <div className="card p-6">
         <div className="relative mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-[#2a2118]">
+            <h2 className="text-2xl font-bold text-[var(--color-text)]">
               AutoBrief calendar
             </h2>
-            <p className="mt-1 text-[#7b6f63]">{monthName}</p>
+            <p className="mt-1 text-[var(--color-text-secondary)]">{monthName}</p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -194,7 +238,7 @@ export function InternalCalendar({ deadlines }: { deadlines: Deadline[] }) {
               className="ml-2 rounded-full p-1 transition-transform duration-200 hover:scale-90"
               title="Choose month"
             >
-              <CalendarDays className="text-[#5b3f2a]" size={32} />
+              <CalendarDays className="text-[var(--color-primary)]" size={32} />
             </button>
           </div>
 
@@ -266,8 +310,8 @@ export function InternalCalendar({ deadlines }: { deadlines: Deadline[] }) {
                 key={day.dateString}
                 className={`min-h-28 rounded-2xl border p-3 transition hover:-translate-y-1 ${
                   day.dateString === today
-                    ? "border-[#5b3f2a] bg-[#fffaf2]"
-                    : "border-[#e8dccd] bg-[#fbf3e8]"
+                    ? "border-[var(--color-primary)] bg-[var(--color-surface)]"
+                    : "border-[var(--color-border)] bg-[var(--color-surface-soft)]"
                 }`}
               >
                 <p className="mb-2 text-sm font-bold text-[#2a2118]">
@@ -285,7 +329,7 @@ export function InternalCalendar({ deadlines }: { deadlines: Deadline[] }) {
                         className={`rounded-xl px-2 py-1 text-left text-xs font-semibold ${
                           isPast
                             ? "bg-[#d8c7b5] text-[#5f5246]"
-                            : "bg-[#5b3f2a] text-white"
+                            : "bg-[var(--color-primary)] text-white"
                         }`}
                         title={deadline.extracted_text ?? ""}
                       >
@@ -308,30 +352,69 @@ export function InternalCalendar({ deadlines }: { deadlines: Deadline[] }) {
 
       <div className="space-y-6">
         <div className="card p-6">
-          <h2 className="text-2xl font-bold text-[#2a2118]">
+          <h2 className="text-2xl font-bold text-[var(--color-text)]">
             Upcoming deadlines
           </h2>
-          <p className="mt-1 text-[#7b6f63]">
+          <p className="mt-1 text-[var(--color-text-secondary)]">
             Check a deadline when it is submitted or completed.
           </p>
 
           <div className="mt-5 space-y-4">
             {upcomingDeadlines.length === 0 ? (
-              <p className="text-[#7b6f63]">No upcoming deadlines.</p>
+              <p className="text-[var(--color-text-secondary)]">No upcoming deadlines.</p>
             ) : (
               upcomingDeadlines.map((deadline) => (
                 <div
                   key={deadline.id}
-                  className="rounded-3xl border border-[#e8dccd] bg-[#fbf3e8] p-5"
+                  className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-soft)] p-5"
                 >
                   <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#9a7b52]">
                     <Clock size={16} />
                     {deadline.parsed_date}
                   </div>
 
-                  <h3 className="text-xl font-bold text-[#2a2118]">
-                    {deadline.extracted_text ?? "Untitled deadline"}
-                  </h3>
+                  {editingDeadlineId === deadline.id ? (
+                    <div className="mb-3 flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editingText}
+                        onChange={(e) => setEditingText(e.target.value)}
+                        onKeyDown={(e) => handleEditKeyDown(e, deadline.id)}
+                        className="flex-1 rounded-xl border border-[#e8dccd] bg-[#fffaf2] px-3 py-2 text-[#2a2118] outline-none"
+                        placeholder="Deadline name"
+                        disabled={isPending}
+                      />
+                      <button
+                        onClick={() => saveDeadlineName(deadline.id)}
+                        disabled={isPending || !editingText.trim()}
+                        className="rounded-xl bg-[#5b3f2a] p-2 text-white transition hover:bg-[#4a3220] disabled:opacity-50"
+                        title="Save"
+                      >
+                        <Check size={16} />
+                      </button>
+                      <button
+                        onClick={cancelEditingDeadline}
+                        disabled={isPending}
+                        className="rounded-xl border border-[#e8c4c0] bg-white p-2 text-[#9d574d] transition hover:bg-[#fff5f4]"
+                        title="Cancel"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="text-xl font-bold text-[#2a2118]">
+                        {deadline.extracted_text ?? "Untitled deadline"}
+                      </h3>
+                      <button
+                        onClick={() => startEditingDeadline(deadline.id, deadline.extracted_text ?? "")}
+                        className="rounded-xl p-2 text-[#7b6f63] transition hover:bg-[#f1e2cc] hover:text-[#2a2118]"
+                        title="Edit deadline name"
+                      >
+                        <Edit3 size={16} />
+                      </button>
+                    </div>
+                  )}
 
                   <p className="mt-2 text-[#7b6f63]">
                     Client: {deadline.clients?.name ?? "Unknown client"}
@@ -386,9 +469,48 @@ export function InternalCalendar({ deadlines }: { deadlines: Deadline[] }) {
                     {deadline.parsed_date}
                   </div>
 
-                  <h3 className="text-xl font-bold text-[#2a2118]">
-                    {deadline.extracted_text ?? "Untitled deadline"}
-                  </h3>
+                  {editingDeadlineId === deadline.id ? (
+                    <div className="mb-3 flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editingText}
+                        onChange={(e) => setEditingText(e.target.value)}
+                        onKeyDown={(e) => handleEditKeyDown(e, deadline.id)}
+                        className="flex-1 rounded-xl border border-[#e8dccd] bg-[#fffaf2] px-3 py-2 text-[#2a2118] outline-none"
+                        placeholder="Deadline name"
+                        disabled={isPending}
+                      />
+                      <button
+                        onClick={() => saveDeadlineName(deadline.id)}
+                        disabled={isPending || !editingText.trim()}
+                        className="rounded-xl bg-[#5b3f2a] p-2 text-white transition hover:bg-[#4a3220] disabled:opacity-50"
+                        title="Save"
+                      >
+                        <Check size={16} />
+                      </button>
+                      <button
+                        onClick={cancelEditingDeadline}
+                        disabled={isPending}
+                        className="rounded-xl border border-[#e8c4c0] bg-white p-2 text-[#9d574d] transition hover:bg-[#fff5f4]"
+                        title="Cancel"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="text-xl font-bold text-[#2a2118]">
+                        {deadline.extracted_text ?? "Untitled deadline"}
+                      </h3>
+                      <button
+                        onClick={() => startEditingDeadline(deadline.id, deadline.extracted_text ?? "")}
+                        className="rounded-xl p-2 text-[#7b6f63] transition hover:bg-[#f1e2cc] hover:text-[#2a2118]"
+                        title="Edit deadline name"
+                      >
+                        <Edit3 size={16} />
+                      </button>
+                    </div>
+                  )}
 
                   <p className="mt-2 text-[#7b6f63]">
                     Client: {deadline.clients?.name ?? "Unknown client"}
@@ -444,9 +566,48 @@ export function InternalCalendar({ deadlines }: { deadlines: Deadline[] }) {
                     Submitted
                   </div>
 
-                  <h3 className="text-xl font-bold text-[#2a2118] line-through">
-                    {deadline.extracted_text ?? "Untitled deadline"}
-                  </h3>
+                  {editingDeadlineId === deadline.id ? (
+                    <div className="mb-3 flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editingText}
+                        onChange={(e) => setEditingText(e.target.value)}
+                        onKeyDown={(e) => handleEditKeyDown(e, deadline.id)}
+                        className="flex-1 rounded-xl border border-[#d7e7cf] bg-[#f0f8e9] px-3 py-2 text-[#2a2118] outline-none"
+                        placeholder="Deadline name"
+                        disabled={isPending}
+                      />
+                      <button
+                        onClick={() => saveDeadlineName(deadline.id)}
+                        disabled={isPending || !editingText.trim()}
+                        className="rounded-xl bg-[#5b3f2a] p-2 text-white transition hover:bg-[#4a3220] disabled:opacity-50"
+                        title="Save"
+                      >
+                        <Check size={16} />
+                      </button>
+                      <button
+                        onClick={cancelEditingDeadline}
+                        disabled={isPending}
+                        className="rounded-xl border border-[#e8c4c0] bg-white p-2 text-[#9d574d] transition hover:bg-[#fff5f4]"
+                        title="Cancel"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="text-xl font-bold text-[#2a2118] line-through">
+                        {deadline.extracted_text ?? "Untitled deadline"}
+                      </h3>
+                      <button
+                        onClick={() => startEditingDeadline(deadline.id, deadline.extracted_text ?? "")}
+                        className="rounded-xl p-2 text-[#7b6f63] transition hover:bg-[#e0f0d0] hover:text-[#2a2118]"
+                        title="Edit deadline name"
+                      >
+                        <Edit3 size={16} />
+                      </button>
+                    </div>
+                  )}
 
                   <p className="mt-2 text-[#7b6f63]">
                     Client: {deadline.clients?.name ?? "Unknown client"}

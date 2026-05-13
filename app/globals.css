@@ -2,15 +2,24 @@
 @plugin "@tailwindcss/typography";
 
 :root {
-  --background: #f6efe4;
-  --surface: #fffaf2;
-  --surface-soft: #fbf3e8;
-  --border: #e8dccd;
-  --text: #2a2118;
-  --muted: #7b6f63;
-  --primary: #5b3f2a;
+  --color-background: #f6efe4;
+  --color-surface: #fffaf2;
+  --color-surface-soft: #fbf3e8;
+  --color-border: #e8dccd;
+  --color-text: #2a2118;
+  --color-text-secondary: #7b6f63;
+  --color-primary: #5b3f2a;
+  --color-secondary: #c99a4a;
+  --color-accent: #f1e2cc;
+  --background: var(--color-background);
+  --surface: var(--color-surface);
+  --surface-soft: var(--color-surface-soft);
+  --border: var(--color-border);
+  --text: var(--color-text);
+  --muted: var(--color-text-secondary);
+  --primary: var(--color-primary);
   --primary-hover: #442d1d;
-  --gold: #c99a4a;
+  --gold: var(--color-secondary);
   --success: #6f8f72;
   --warning: #c28b37;
   --danger: #b86b60;

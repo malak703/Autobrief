@@ -12,12 +12,16 @@ from io import BytesIO
 from typing import List
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile, HTTPException, Body
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, File, UploadFile, HTTPException, Body, Form
 from groq import Groq
 from PIL import Image
 from pydantic import AliasChoices, BaseModel, Field
+from starlette.requests import Request as StarletteRequest
+
+
+class LargeMultipartRequest(StarletteRequest):
+    def form(self, *, max_files: int | float = 1000, max_fields: int | float = 1000, max_part_size: int = 20 * 1024 * 1024):
+        return super().form(max_files=max_files, max_fields=max_fields, max_part_size=max_part_size)
 
 # Lazy-load pytesseract so a broken optional stack (e.g. bad numpy wheel) does not crash app startup.
 _pytesseract_mod = None
@@ -100,16 +104,8 @@ print(f"Loading FastAPI service from: {__file__}")
 app = FastAPI(
     title="FastAPI Service",
     description="A FastAPI service for processing various tasks",
-    version="1.0.0"
-)
-
-# Add CORS middleware to allow Next.js app to connect
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    version="1.0.0",
+    request_class=LargeMultipartRequest,
 )
 
 
@@ -239,6 +235,8 @@ async def health_check():
             "/generate-project-brief",
             "/extract-deadlines",
             "/process-client-feedback",
+            "/generate-meeting-summary",
+            "/process-meeting",
         ],
     }
 
@@ -677,6 +675,321 @@ async def extract_text_from_images(images: List[UploadFile] = File(...)):
             chunks.append(f"[FROM IMAGE]: {text.strip()}")
 
     return {"extracted_text": "\n\n".join(chunks)}
+
+
+def _groq_generate_meeting_summary(title: str, transcript: str) -> dict:
+    """Generate meeting summary with overview, decisions, requirements, action items, questions, deadlines, and brief updates."""
+    api_key = _groq_api_key_or_raise()
+    model = (os.getenv("GROQ_MEETING_MODEL") or "llama-3.3-70b-versatile").strip()
+    client = Groq(api_key=api_key)
+    
+    prompt = f"""
+You are an AI meeting assistant for a client intake system.
+
+You will receive a transcript of a client meeting.
+
+Your task is to extract only useful project information.
+
+Do not invent anything.
+If something is unclear, put it in open_questions.
+If a date is vague, mention the original phrase and say it needs confirmation.
+
+Return ONLY valid JSON with this exact structure:
+
+{{
+  "overview": "",
+  "key_decisions": [],
+  "client_requirements": [],
+  "action_items": [
+    {{
+      "owner": "employee/client",
+      "task": ""
+    }}
+  ],
+  "open_questions": [],
+  "deadline_mentions": [
+    {{
+      "original_text": "",
+      "interpreted_date": null,
+      "needs_confirmation": true
+    }}
+  ],
+  "suggested_brief_updates": []
+}}
+
+Meeting title:
+{title}
+
+Transcript:
+{transcript}
+"""
+
+    completion = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": "You are a professional meeting summarizer. Return only valid JSON."},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.1,
+        max_tokens=4096,
+    )
+    
+    raw = (completion.choices[0].message.content or "").strip()
+    try:
+        return json.loads(_strip_json_fences(raw))
+    except json.JSONDecodeError:
+        # Return a basic structure if parsing fails
+        return {
+            "overview": "Failed to parse meeting summary",
+            "key_decisions": [],
+            "client_requirements": [],
+            "action_items": [],
+            "open_questions": ["Summary generation failed - please review transcript manually"],
+            "deadline_mentions": [],
+            "suggested_brief_updates": []
+        }
+
+
+@app.post("/generate-meeting-summary")
+async def generate_meeting_summary(payload: dict = Body(...)):
+    """
+    Generate a structured meeting summary from title and transcript.
+    
+    Args:
+        payload: Dict containing 'title' and 'transcript' keys
+    
+    Returns:
+        JSON response with meeting summary structure
+    """
+    print("[OK] POST /generate-meeting-summary endpoint called")
+    
+    title = payload.get("title", "").strip()
+    transcript = payload.get("transcript", "").strip()
+    
+    if not title or not transcript:
+        raise HTTPException(
+            status_code=400, 
+            detail="Both 'title' and 'transcript' are required in the request body."
+        )
+    
+    try:
+        summary = await asyncio.to_thread(_groq_generate_meeting_summary, title, transcript)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate meeting summary: {str(e)}",
+        ) from e
+    
+    return summary
+
+
+ALLOWED_EXTENSIONS = {"mp3", "wav", "m4a", "mp4", "webm"}
+
+
+@app.post("/process-meeting")
+async def process_meeting(
+    title: str = Form(...),
+    clientName: str = Form(...),
+    file: UploadFile = File(...)
+):
+    print("[START] POST /process-meeting called")
+
+    extension = file.filename.split(".")[-1].lower()
+
+    if extension not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file type. Use mp3, wav, m4a, mp4, or webm."
+        )
+
+    print(f"[INFO] Received file: {file.filename}")
+    print(f"[INFO] Extension: {extension}")
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{extension}") as temp_file:
+        file_bytes = await file.read()
+        temp_file.write(file_bytes)
+        temp_path = temp_file.name
+
+    print(f"[INFO] Saved temp file: {temp_path}")
+    print(f"[INFO] File size: {len(file_bytes)} bytes")
+
+    try:
+        print("[STEP 1] Starting transcription...")
+
+        transcript = await asyncio.to_thread(
+            transcribe_meeting_file,
+            temp_path
+        )
+
+        print("[STEP 1 DONE] Transcription finished")
+        print(f"[INFO] Transcript length: {len(transcript)} characters")
+
+        if not transcript.strip():
+            raise HTTPException(
+                status_code=500,
+                detail="No transcript was generated from the uploaded file."
+            )
+
+        print("[STEP 2] Starting report generation...")
+
+        report = await asyncio.to_thread(
+            generate_meeting_report,
+            title,
+            clientName,
+            transcript
+        )
+
+        print("[STEP 2 DONE] Report generated")
+
+        return {
+            "transcript": transcript,
+            "report": report
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        print("[ERROR] Failed to process meeting:", str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process meeting: {str(e)}"
+        )
+
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+            print("[CLEANUP] Temp file deleted")
+
+
+def transcribe_meeting_file(file_path: str) -> str:
+    api_key = _groq_api_key_or_raise()
+    client = Groq(api_key=api_key)
+
+    print("[GROQ] Sending file to Whisper...")
+
+    with open(file_path, "rb") as audio_file:
+        transcription = client.audio.transcriptions.create(
+            file=audio_file,
+            model="whisper-large-v3",
+            response_format="text"
+        )
+
+    print("[GROQ] Whisper returned response")
+
+    if isinstance(transcription, str):
+        return transcription.strip()
+
+    return getattr(transcription, "text", "").strip()
+
+
+def generate_meeting_report(title: str, client_name: str, transcript: str):
+    api_key = _groq_api_key_or_raise()
+    model = (os.getenv("GROQ_MEETING_MODEL") or "llama-3.1-8b-instant").strip()
+    client = Groq(api_key=api_key)
+    
+    prompt = f"""
+You are an AI meeting assistant for AutoBrief, an agency intake system.
+
+A client uploaded a meeting recording. The meeting was transcribed.
+
+Your task:
+Create a detailed structured meeting report.
+
+Important rules:
+- Do not invent information.
+- Use only the transcript.
+- If something is missing, put it in "gaps".
+- If something is unclear, put it in "unclear_points".
+- Suggest follow-up questions based on the gaps.
+- Keep the report useful for an employee who needs to understand the client request.
+- Return ONLY valid JSON.
+
+Client name:
+{client_name}
+
+Meeting title:
+{title}
+
+Transcript:
+{transcript}
+
+Return this exact JSON structure:
+
+{{
+  "meeting_overview": "",
+  "what_client_wants": [],
+  "goals_and_success_criteria": [],
+  "key_decisions": [],
+  "requirements": [],
+  "action_items": [
+    {{
+      "owner": "client | employee | team | unknown",
+      "task": "",
+      "due_date": null
+    }}
+  ],
+  "deadline_mentions": [
+    {{
+      "original_text": "",
+      "interpreted_date": null,
+      "needs_confirmation": true
+    }}
+  ],
+  "budget_mentions": [],
+  "gaps": [],
+  "unclear_points": [],
+  "risks": [],
+  "suggested_follow_up_questions": [],
+  "suggested_brief_updates": [],
+  "client_quotes": []
+}}
+"""
+
+    completion = client.chat.completions.create(
+        model=model,
+        messages=[
+            {
+                "role": "system",
+                "content": "You return only valid JSON. No markdown. No explanation."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        temperature=0.2,
+    )
+
+    content = completion.choices[0].message.content
+
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        return {
+            "meeting_overview": "AI returned invalid JSON.",
+            "what_client_wants": [],
+            "goals_and_success_criteria": [],
+            "key_decisions": [],
+            "requirements": [],
+            "action_items": [],
+            "deadline_mentions": [],
+            "budget_mentions": [],
+            "gaps": [
+                "Could not parse the AI report."
+            ],
+            "unclear_points": [],
+            "risks": [],
+            "suggested_follow_up_questions": [
+                "Please regenerate the meeting report."
+            ],
+            "suggested_brief_updates": [],
+            "client_quotes": [],
+            "raw_ai_output": content
+        }
+
 
 if __name__ == "__main__":
     import uvicorn

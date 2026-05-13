@@ -23,7 +23,7 @@ export default async function DashboardPage() {
     <div>
       <div className="mb-10">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#9a7b52]">
-          Company dashboard
+          Dashboard
         </p>
         <h1 className="mt-2 text-5xl font-bold tracking-tight text-[#2a2118]">
           Brief workspace
@@ -34,7 +34,7 @@ export default async function DashboardPage() {
           </p>
         )}
         <p className="mt-3 max-w-2xl text-lg text-[#7b6f63]">
-          Manage companies, employees, clients, proposals, versions, and client feedback from one calm workspace.
+          Manage clients, proposals, versions, and client feedback from one calm workspace.
         </p>
       </div>
 
