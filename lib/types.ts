@@ -43,6 +43,7 @@ export type Brief = {
   completion_score: number | null;
   created_at: string;
   confirmed_at: string | null;
+  final_proposal: string | null;
 };
 
 export type Feedback = {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerSupabase } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
   try {
@@ -73,6 +74,25 @@ Format the response as clean, professional markdown that would be suitable for c
     const proposal = result.choices?.[0]?.message?.content || 'Failed to generate proposal';
     
     console.log('Proposal generated successfully');
+
+    // Save the proposal to Supabase
+    if (token) {
+      try {
+        const supabase = await createServerSupabase();
+        const { error: updateError } = await supabase
+          .from('briefs')
+          .update({ final_proposal: proposal })
+          .eq('token', token);
+
+        if (updateError) {
+          console.error('Failed to save proposal to DB:', updateError);
+        } else {
+          console.log('Proposal saved to Supabase successfully');
+        }
+      } catch (dbError) {
+        console.error('DB error saving proposal:', dbError);
+      }
+    }
 
     return NextResponse.json({ 
       success: true, 
