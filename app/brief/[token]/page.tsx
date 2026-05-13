@@ -30,7 +30,7 @@ export default function PublicBriefPage({
         image:        { type: 'jpeg', quality: 0.98 },
         html2canvas:  { scale: 2 },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
+      } as const;
       html2pdf().set(opt).from(proposalRef.current).save();
     } catch (err) {
       console.error("Failed to generate PDF", err);
@@ -53,6 +53,14 @@ export default function PublicBriefPage({
       
       setBrief(result.data.brief as any);
       setSections(result.data.sections);
+
+      // If a final proposal was already generated, show it immediately
+      const savedProposal = (result.data.brief as any)?.final_proposal;
+      if (savedProposal) {
+        setFinalProposal(savedProposal);
+        setShowProposal(true);
+      }
+
       setLoading(false);
     };
     
@@ -190,6 +198,63 @@ export default function PublicBriefPage({
   }
 
   const headline = brief?.content ? brief.content.split('\n')[0] : "Project Brief";
+
+  // If a final proposal exists, show ONLY the proposal view
+  if (showProposal && finalProposal) {
+    return (
+      <main className="min-h-screen bg-[#f6efe4] px-5 py-10">
+        <div className="mx-auto max-w-4xl">
+          <div className="card mb-8 p-8 text-center">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#9a7b52]">
+              Final proposal
+            </p>
+            <h1 className="mt-2 text-4xl font-bold leading-tight text-[#2a2118] sm:text-5xl">
+              {headline}
+            </h1>
+          </div>
+
+          <div className="card p-8">
+            <h2 className="text-3xl font-bold text-[#2a2118] mb-6">
+              Final Project Proposal
+            </h2>
+            <div className="bg-white rounded-lg p-8 border border-[#e8dccd]" ref={proposalRef}>
+              <div className="prose prose-lg prose-brown max-w-none">
+                <ReactMarkdown>
+                  {finalProposal}
+                </ReactMarkdown>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button 
+                type="button" 
+                className="btn-secondary"
+                onClick={() => setShowProposal(false)}
+              >
+                Back to Edit
+              </button>
+              <button 
+                type="button" 
+                className="btn-primary"
+                onClick={() => {
+                  navigator.clipboard.writeText(finalProposal);
+                  alert('Proposal copied to clipboard!');
+                }}
+              >
+                Copy Proposal
+              </button>
+              <button 
+                type="button" 
+                className="btn-primary"
+                onClick={handleDownloadPdf}
+              >
+                Download PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-[#f6efe4] px-5 py-10">
@@ -347,55 +412,11 @@ export default function PublicBriefPage({
           />
         </div>
 
-        {/* Final Proposal Section */}
-        {showProposal && (
-          <div className="card mt-8 p-8">
-            <h2 className="text-3xl font-bold text-[#2a2118] mb-6">
-              Final Project Proposal
-            </h2>
-            <div className="bg-white rounded-lg p-8 border border-[#e8dccd]" ref={proposalRef}>
-              <div className="prose prose-lg prose-brown max-w-none">
-                <ReactMarkdown>
-                  {finalProposal}
-                </ReactMarkdown>
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <button 
-                type="button" 
-                className="btn-secondary"
-                onClick={() => setShowProposal(false)}
-              >
-                Back to Edit
-              </button>
-              <button 
-                type="button" 
-                className="btn-primary"
-                onClick={() => {
-                  navigator.clipboard.writeText(finalProposal);
-                  alert('Proposal copied to clipboard!');
-                }}
-              >
-                Copy Proposal
-              </button>
-              <button 
-                type="button" 
-                className="btn-primary"
-                onClick={handleDownloadPdf}
-              >
-                Download PDF
-              </button>
-            </div>
-          </div>
-        )}
-
-        {!showProposal && (
-          <div className="mt-8 flex justify-end">
-            <button type="button" className="btn-primary" onClick={handleGenerateProposal}>
-              {submitting ? 'Generating...' : 'Show Final Proposal'}
-            </button>
-          </div>
-        )}
+        <div className="mt-8 flex justify-end">
+          <button type="button" className="btn-primary" onClick={handleGenerateProposal}>
+            {submitting ? 'Generating...' : 'Show Final Proposal'}
+          </button>
+        </div>
       </div>
     </main>
   );

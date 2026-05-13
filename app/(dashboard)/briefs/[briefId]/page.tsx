@@ -5,6 +5,7 @@ import { VersionDiff } from "@/components/version-diff";
 import { briefCardTitle, briefToSections, gapsToMissingList } from "@/lib/brief-helpers";
 import { createServerSupabase } from "@/lib/supabase";
 import { headers } from "next/headers";
+import { ProposalView } from "@/components/proposal-view";
 
 async function clientReviewAbsoluteUrl(token: string): Promise<string> {
   const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
@@ -69,16 +70,22 @@ export default async function BriefDetailsPage({
         <VersionDiff />
       </div>
 
-      <p className="mb-6 max-w-2xl text-[#7b6f63]">
-        Raw client messages, transcripts, and OCR are processed into this draft only. Edit each
-        section, then send the client link when you are ready.
-      </p>
+      {brief.final_proposal ? (
+        <ProposalView proposal={brief.final_proposal} sections={sections} briefId={brief.id} />
+      ) : (
+        <>
+          <p className="mb-6 max-w-2xl text-[#7b6f63]">
+            Raw client messages, transcripts, and OCR are processed into this draft only. Edit each
+            section, then send the client link when you are ready.
+          </p>
 
-      <div className="space-y-5">
-        {sections.map((section) => (
-          <SectionCard key={section.id} briefId={brief.id} section={section} />
-        ))}
-      </div>
+          <div className="space-y-5">
+            {sections.map((section) => (
+              <SectionCard key={section.id} briefId={brief.id} section={section} />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
