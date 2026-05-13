@@ -27,7 +27,7 @@ export default async function ClientDetailsPage({
   }
 
   const briefs = clientBriefs ?? [];
-
+  
   return (
     <div>
       <div className="card mb-8 p-8">

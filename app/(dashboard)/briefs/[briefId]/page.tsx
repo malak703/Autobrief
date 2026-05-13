@@ -6,6 +6,7 @@ import { briefToSections, gapsToMissingList } from "@/lib/brief-helpers";
 import { createServerSupabase } from "@/lib/supabase";
 import { headers } from "next/headers";
 
+
 async function clientReviewAbsoluteUrl(token: string): Promise<string> {
   const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
   if (fromEnv) return `${fromEnv}/brief/${token}`;
@@ -29,9 +30,7 @@ export default async function BriefDetailsPage({
     .eq("id", briefId)
     .maybeSingle();
 
-  if (!brief) {
-    return <p>Brief not found.</p>;
-  }
+    
 
   const completion = brief.completion_score ?? 0;
   const missing = gapsToMissingList(brief.gaps);

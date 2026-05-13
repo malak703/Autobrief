@@ -1,4 +1,4 @@
-import { BriefCard } from "@/components/brief-card";
+import { BriefsSearchableList } from "@/components/briefs-searchable-list";
 import { createServerSupabase } from "@/lib/supabase";
 
 export default async function BriefsIndexPage() {
@@ -22,11 +22,7 @@ export default async function BriefsIndexPage() {
       {rows.length === 0 ? (
         <p className="text-[#7b6f63]">No briefs yet.</p>
       ) : (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          {rows.map((brief) => (
-            <BriefCard key={brief.id} brief={brief} />
-          ))}
-        </div>
+        <BriefsSearchableList briefs={rows} />
       )}
     </div>
   );

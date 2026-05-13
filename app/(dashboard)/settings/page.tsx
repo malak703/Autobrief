@@ -10,6 +10,87 @@ type SettingsPageProps = {
   };
 };
 
+type NotificationPreferences = {
+  client_viewed_proposal: boolean;
+  client_confirmed_proposal: boolean;
+  client_edited_proposal: boolean;
+  deadline_24h_left: boolean;
+};
+
+function NotificationSettingsCard({
+  preferences,
+}: {
+  preferences: NotificationPreferences;
+}) {
+  const items: Array<{
+    key: keyof NotificationPreferences;
+    label: string;
+    description: string;
+  }> = [
+    {
+      key: "client_viewed_proposal",
+      label: "Client viewed proposal",
+      description: "Receive updates when a client views a proposal.",
+    },
+    {
+      key: "client_confirmed_proposal",
+      label: "Client confirmed proposal",
+      description: "Receive updates when a client confirms a proposal.",
+    },
+    {
+      key: "client_edited_proposal",
+      label: "Client edited proposal",
+      description: "Receive updates when a client edits a proposal.",
+    },
+    {
+      key: "deadline_24h_left",
+      label: "24 hours until deadline",
+      description: "Receive a reminder when a deadline is 24 hours away.",
+    },
+  ];
+
+  return (
+    <div className="card p-6">
+      <div className="mb-6 flex items-center gap-4">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f1e2cc] text-[#5b3f2a]">
+          N
+        </div>
+
+        <div>
+          <h2 className="text-2xl font-bold text-[#2a2118]">
+            Notifications
+          </h2>
+          <p className="text-[#7b6f63]">
+            Manage your notification preferences.
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {items.map((item) => (
+          <div
+            key={item.key}
+            className="rounded-2xl border border-[#e8dccd] bg-[#fffaf2] p-4"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="font-semibold text-[#2a2118]">{item.label}</p>
+                <p className="text-sm text-[#7b6f63]">
+                  {item.description}
+                </p>
+              </div>
+
+              <span className="text-sm font-semibold text-[#2a2118]">
+                {preferences[item.key] ? "On" : "Off"}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default async function SettingsPage({
   searchParams,
 }: SettingsPageProps) {
@@ -25,6 +106,27 @@ export default async function SettingsPage({
     user?.user_metadata?.name ||
     "Team Member";
 
+  const defaultNotificationPreferences = {
+    client_viewed_proposal: true,
+    client_confirmed_proposal: true,
+    client_edited_proposal: true,
+    deadline_24h_left: true,
+  };
+
+  let notificationPreferences = defaultNotificationPreferences;
+
+  if (user) {
+    const { data } = await supabase
+      .from("notification_preferences")
+      .select(
+        "client_viewed_proposal, client_confirmed_proposal, client_edited_proposal, deadline_24h_left"
+      )
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    notificationPreferences = data ?? defaultNotificationPreferences;
+  }
+
   return (
     <div>
       <div className="mb-8">
@@ -37,7 +139,7 @@ export default async function SettingsPage({
         </h1>
 
         <p className="mt-3 max-w-2xl text-lg text-[#7b6f63]">
-          Manage your username and password.
+          Manage your username, password, theme, and notifications.
         </p>
       </div>
 
@@ -162,6 +264,8 @@ export default async function SettingsPage({
               </div>
             </form>
           </div>
+
+          <NotificationSettingsCard preferences={notificationPreferences} />
         </div>
 
         <ThemeCustomizer />

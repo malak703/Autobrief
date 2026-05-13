@@ -1,5 +1,5 @@
 import { AddClientForm } from "@/components/add-client-form";
-import { ClientCard } from "@/components/client-card";
+import { ClientsSearchableList } from "@/components/clients-searchable-list";
 import { createServerSupabase } from "@/lib/supabase";
 import { syncBusinessOwnerFromAuth } from "@/lib/profile/sync-business-owner";
 
@@ -25,6 +25,10 @@ export default async function ClientsPage() {
   }
 
   const rows = clients ?? [];
+  const clientsWithBriefs = rows.map((client) => ({
+    client,
+    activeBriefs: countByClient.get(client.id) ?? 0,
+  }));
 
   return (
     <div>
@@ -59,25 +63,10 @@ export default async function ClientsPage() {
         <AddClientForm />
       </div>
 
-      <div className="mb-8">
-        <input
-          placeholder="Search clients..."
-          className="w-full rounded-3xl border border-[#e8dccd] bg-[#fffaf2] px-5 py-4 text-[#2a2118] outline-none placeholder:text-[#a4998d]"
-        />
-      </div>
-
       {rows.length === 0 ? (
         <p className="text-[#7b6f63]">No clients yet.</p>
       ) : (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          {rows.map((client) => (
-            <ClientCard
-              key={client.id}
-              client={client}
-              activeBriefs={countByClient.get(client.id) ?? 0}
-            />
-          ))}
-        </div>
+        <ClientsSearchableList items={clientsWithBriefs} />
       )}
     </div>
   );
