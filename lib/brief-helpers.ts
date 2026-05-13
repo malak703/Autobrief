@@ -53,6 +53,93 @@ export function briefToSections(brief: Brief): BriefSection[] {
   }));
 }
 
+/**
+ * Split stored follow-up text into per-question strings for the client UI.
+ * Handles @@@ markers (see FastAPI prompt), numbered lists, and ops notes appended via --- in briefs.ts.
+ */
+export function splitFollowupQuestionsField(content: string): {
+  questions: string[];
+  opsNotes: string | null;
+} {
+  const raw = (content ?? "").trim();
+  if (!raw) return { questions: [], opsNotes: null };
+
+  const noteParts = raw.split(/\n\n---\n\n/);
+  const mainBlob = (noteParts[0] ?? "").replace(/\r\n/g, "\n").trim();
+  const opsNotes =
+    noteParts.length > 1
+      ? noteParts.slice(1).join("\n\n---\n\n").trim() || null
+      : null;
+
+  if (!mainBlob) return { questions: [], opsNotes };
+
+  let body = mainBlob
+    .replace(/^4\.\s*Follow[- ]up questions[^\n]*\n*/i, "")
+    .replace(/\*\*CRITICAL:[\s\S]*?\*\*\s*/gi, "")
+    .trim();
+
+  const splitPrimary = (s: string): string[] => {
+    if (s.includes("@@@")) {
+      return s
+        .split(/\s*@@@\s*/)
+        .map((p) => p.trim())
+        .filter(Boolean);
+    }
+    const numbered = s.split(/\n(?=\d+\.\s)/).map((p) => p.trim()).filter(Boolean);
+    if (numbered.length > 1) return numbered;
+    return s
+      .split(/\n{2,}/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+  };
+
+  const normalizeChunk = (chunk: string) => {
+    let q = chunk.replace(/@@@/g, "").trim();
+    q = q.replace(/^\d+\.\s*/, "").trim();
+    q = q.replace(/^here are[^\n]+\n+/i, "").trim();
+    q = q.replace(/^follow[- ]up questions?:?\s*\n+/i, "").trim();
+    return q;
+  };
+
+  let questions = splitPrimary(body).map(normalizeChunk).filter((q) => q.length > 0);
+
+  if (questions.length === 1 && questions[0].includes("\n")) {
+    const lines = questions[0]
+      .split(/\n+/)
+      .map((l) => l.trim())
+      .filter(
+        (l) =>
+          l.length > 0 &&
+          !/^here are\b/i.test(l) &&
+          !/^follow[- ]up questions?\b/i.test(l) &&
+          !/^4\.\s/i.test(l) &&
+          !/^\*\*critical/i.test(l)
+      );
+    if (lines.length > 1) {
+      questions = lines.map(normalizeChunk).filter((q) => q.length > 0);
+    }
+  }
+
+  if (questions.length === 0) {
+    const fallback = normalizeChunk(body.replace(/\s*@@@\s*/g, "\n").trim());
+    if (fallback) questions = [fallback];
+  }
+
+  return { questions, opsNotes };
+}
+
+/** Rebuild follow-up column text after editing split questions (dashboard). */
+export function joinFollowupQuestionsField(
+  questions: string[],
+  opsNotes: string | null | undefined
+): string {
+  const main = questions.map((q) => q.trim()).filter(Boolean).join("\n@@@\n");
+  const notes = (opsNotes ?? "").trim();
+  if (main && notes) return `${main}\n\n---\n\n${notes}`;
+  if (notes) return notes;
+  return main;
+}
+
 /** Split FastAPI / Groq 4-section project brief into DB columns (best-effort). */
 export function parseProjectBriefIntoSections(full: string): {
   summary: string | null;
@@ -77,17 +164,32 @@ export function parseProjectBriefIntoSections(full: string): {
     return lines.slice(1).join("\n").trim();
   };
 
-  const blocks = text
-    .split(/\n(?=\d+\.\s)/)
+  let blocks = text
+    .split(/###+/)
     .map((b) => b.trim())
     .filter(Boolean);
 
-  for (const block of blocks) {
-    if (/^1\.\s/.test(block)) empty.summary = stripTitleLine(block) || block;
-    else if (/^2\.\s/.test(block)) empty.goals = stripTitleLine(block) || block;
-    else if (/^3\.\s/.test(block)) empty.gaps = stripTitleLine(block) || block;
-    else if (/^4\.\s/.test(block))
-      empty.followup_questions = stripTitleLine(block) || block;
+  if (blocks.length === 1 && !full.includes("###")) {
+    blocks = text
+      .split(/\n(?=\d+\.\s)/)
+      .map((b) => b.trim())
+      .filter(Boolean);
+  }
+
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    const lower = block.toLowerCase();
+    
+    if (/^1\.\s/.test(block) || lower.includes("what the client wants")) empty.summary = stripTitleLine(block) || block;
+    else if (/^2\.\s/.test(block) || lower.includes("goals & success criteria") || lower.includes("goals and success")) empty.goals = stripTitleLine(block) || block;
+    else if (/^3\.\s/.test(block) || lower.includes("gaps & unclear points") || lower.includes("gaps and unclear")) empty.gaps = stripTitleLine(block) || block;
+    else if (/^4\.\s/.test(block) || lower.includes("follow-up questions") || lower.includes("follow up questions")) empty.followup_questions = stripTitleLine(block) || block;
+    else {
+      if (i === 0 && !empty.summary) empty.summary = stripTitleLine(block) || block;
+      else if (i === 1 && !empty.goals) empty.goals = stripTitleLine(block) || block;
+      else if (i === 2 && !empty.gaps) empty.gaps = stripTitleLine(block) || block;
+      else if (i === 3 && !empty.followup_questions) empty.followup_questions = stripTitleLine(block) || block;
+    }
   }
 
   if (!empty.summary && blocks.length === 1) {

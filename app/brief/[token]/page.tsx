@@ -1,6 +1,10 @@
 import { VoiceFeedback } from "@/components/voice-feedback";
 import { VersionDiff } from "@/components/version-diff";
-import { briefToSections, parseNormalizedInput } from "@/lib/brief-helpers";
+import {
+  briefToSections,
+  parseNormalizedInput,
+  splitFollowupQuestionsField,
+} from "@/lib/brief-helpers";
 import { supabase } from "@/lib/supabase";
 
 export default async function PublicBriefPage({
@@ -93,33 +97,98 @@ export default async function PublicBriefPage({
         )}
 
         <div className="mt-8 space-y-5">
-          {sections.map((section) => (
-            <div key={section.id} className="card p-6">
-              <h2 className="text-2xl font-bold text-[#2a2118]">
-                {section.title}
-              </h2>
+          {sections.map((section) => {
+            if (section.id === "followup") {
+              const content = section.content || "";
+              const { questions, opsNotes } =
+                splitFollowupQuestionsField(content);
 
-              <p className="mt-4 leading-8 text-[#5f5246]">
-                {section.content || "—"}
-              </p>
+              if (questions.length === 0) {
+                return (
+                  <div key={section.id} className="card p-6">
+                    <h2 className="text-2xl font-bold text-[#2a2118]">
+                      {section.title}
+                    </h2>
+                    <p className="mt-4 leading-8 text-[#5f5246] whitespace-pre-wrap">
+                      {section.content || "—"}
+                    </p>
+                    <div className="mt-6">
+                      <VoiceFeedback />
+                    </div>
+                  </div>
+                );
+              }
 
-              <div className="mt-6 flex flex-wrap gap-3">
-                <button type="button" className="btn-primary">
-                  ✓ Looks right
-                </button>
-                <button type="button" className="btn-secondary">
-                  ✕ Edit this
-                </button>
+              return (
+                <div key={section.id} className="space-y-5">
+                  <h2 className="text-2xl font-bold text-[#2a2118] px-2">
+                    {section.title}
+                  </h2>
+                  {questions.map((q, idx) => (
+                    <div key={idx} className="card p-6">
+                      <p className="text-lg font-semibold leading-relaxed text-[#2a2118]">
+                        {q}
+                      </p>
+                      <label className="mt-4 block text-sm font-medium text-[#5f5246]">
+                        Your answer
+                        <textarea
+                          name={`followup-${idx}`}
+                          placeholder="Type your answer here..."
+                          className="mt-2 min-h-24 w-full rounded-2xl border border-[#e8dccd] bg-[#fffaf2] p-4 text-base text-[#2a2118] outline-none"
+                        />
+                      </label>
+                    </div>
+                  ))}
+                  {opsNotes && (
+                    <div className="rounded-2xl border border-[#e8dccd] bg-[#fffaf2]/80 p-5">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[#9a7b52]">
+                        Team notes
+                      </p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#5f5246]">
+                        {opsNotes}
+                      </p>
+                    </div>
+                  )}
+                  <div className="card p-6">
+                    <h3 className="text-lg font-bold text-[#2a2118]">
+                      Voice reply
+                    </h3>
+                    <div className="mt-4">
+                      <VoiceFeedback />
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div key={section.id} className="card p-6">
+                <h2 className="text-2xl font-bold text-[#2a2118]">
+                  {section.title}
+                </h2>
+
+                <p className="mt-4 leading-8 text-[#5f5246] whitespace-pre-wrap">
+                  {section.content || "—"}
+                </p>
+
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <button type="button" className="btn-primary">
+                    ✓ Looks right
+                  </button>
+                  <button type="button" className="btn-secondary">
+                    ✕ Edit this
+                  </button>
+                </div>
+
+                <textarea
+                  placeholder="Write what needs to change..."
+                  className="mt-5 min-h-28 w-full rounded-2xl border border-[#e8dccd] bg-[#fffaf2] p-4 outline-none"
+                />
+
+                <VoiceFeedback />
               </div>
-
-              <textarea
-                placeholder="Write what needs to change..."
-                className="mt-5 min-h-28 w-full rounded-2xl border border-[#e8dccd] bg-[#fffaf2] p-4 outline-none"
-              />
-
-              <VoiceFeedback />
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="mt-8 flex justify-end">

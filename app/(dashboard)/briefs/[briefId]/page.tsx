@@ -1,8 +1,19 @@
 import { CompletionMeter } from "@/components/completion-meter";
 import { SectionCard } from "@/components/section-card";
+import { SendClientLink } from "@/components/send-client-link";
 import { VersionDiff } from "@/components/version-diff";
 import { briefToSections, gapsToMissingList } from "@/lib/brief-helpers";
 import { createServerSupabase } from "@/lib/supabase";
+import { headers } from "next/headers";
+
+async function clientReviewAbsoluteUrl(token: string): Promise<string> {
+  const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
+  if (fromEnv) return `${fromEnv}/brief/${token}`;
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? "http";
+  return `${proto}://${host}/brief/${token}`;
+}
 
 export default async function BriefDetailsPage({
   params,
@@ -25,12 +36,13 @@ export default async function BriefDetailsPage({
   const completion = brief.completion_score ?? 0;
   const missing = gapsToMissingList(brief.gaps);
   const sections = briefToSections(brief);
+  const clientUrl = await clientReviewAbsoluteUrl(brief.token);
 
   return (
     <div>
       <div className="card mb-8 p-8">
-        <div className="flex items-start justify-between">
-          <div>
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#9a7b52]">
               Brief review
             </p>
@@ -43,9 +55,12 @@ export default async function BriefDetailsPage({
             </p>
           </div>
 
-          <button type="button" className="btn-primary" disabled={completion < 100}>
-            Send to client
-          </button>
+          <SendClientLink
+            briefId={brief.id}
+            clientUrl={clientUrl}
+            status={brief.status}
+            completion={completion}
+          />
         </div>
 
         <div className="mt-8">
