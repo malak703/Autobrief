@@ -1,6 +1,7 @@
 "use client";
 
 import { createClientRecord } from "@/app/actions/clients";
+import { Spinner } from "@/components/spinner";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -117,7 +118,8 @@ export function AddClientForm() {
             />
           </div>
 
-          <button type="submit" disabled={pending} className="btn-primary">
+          <button type="submit" disabled={pending} className="btn-primary flex items-center gap-2">
+            {pending && <Spinner size={16} className="text-white" />}
             {pending ? "Saving…" : "Save client"}
           </button>
         </form>

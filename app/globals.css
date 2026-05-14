@@ -74,4 +74,14 @@ body {
   padding: 12px 18px;
   font-weight: 600;
   cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: var(--border);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

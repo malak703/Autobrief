@@ -1,4 +1,5 @@
 import { createServerSupabase } from '@/lib/supabase';
+import { getExtractServiceBaseUrl } from '@/lib/extract-service';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
@@ -48,36 +49,38 @@ Please generate a final project proposal that includes:
 Format the response as clean, professional markdown that would be suitable for client presentation.
 If something wasn't stated, do not include it. Do not hallucinate or make assumptions.`;
 
-    // Call Groq API
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 2000,
-      }),
-    });
+    // Route through FastAPI backend on Railway (which has GROQ_API_KEY)
+    const baseUrl = getExtractServiceBaseUrl();
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 120_000);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Groq API error:', errorText);
-      throw new Error(`Failed to call Groq API: ${response.status} ${errorText}`);
+    let proposal: string;
+
+    try {
+      const response = await fetch(`${baseUrl}/generate-proposal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+        signal: ctrl.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('FastAPI proposal error:', response.status, errorText);
+        throw new Error(`FastAPI returned ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      proposal = result.proposal || result.project_brief || '';
+
+      if (!proposal) {
+        throw new Error('FastAPI returned empty proposal');
+      }
+    } finally {
+      clearTimeout(timeout);
     }
 
-    const result = await response.json();
-    const proposal = result.choices?.[0]?.message?.content || 'Failed to generate proposal';
-
-    console.log('Proposal generated successfully');
+    console.log('Proposal generated successfully via FastAPI');
 
     // Save the proposal to Supabase
     if (token) {
@@ -104,11 +107,12 @@ If something wasn't stated, do not include it. Do not hallucinate or make assump
     });
 
   } catch (error) {
-    console.error('Error generating proposal:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Error generating proposal:', message);
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to generate proposal'
+        error: `Failed to generate proposal: ${message}`
       },
       { status: 500 }
     );

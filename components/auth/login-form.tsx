@@ -3,6 +3,7 @@
 import { formatAuthError } from "@/lib/auth/format-auth-error";
 import { isProbablyValidEmail, normalizeEmail } from "@/lib/auth/email";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
+import { Spinner } from "@/components/spinner";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -99,7 +100,8 @@ export function LoginForm() {
         />
       </div>
 
-      <button type="submit" disabled={loading} className="btn-primary w-full">
+      <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
+        {loading && <Spinner size={16} className="text-white" />}
         {loading ? "Signing in…" : "Sign in"}
       </button>
 
