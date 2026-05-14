@@ -1,6 +1,6 @@
 /**
  * Calls the Labtea FastAPI extract service (voice transcription, image OCR, etc.).
- * Configure EXTRACT_SERVICE_URL (e.g. http://127.0.0.1:8000) in the Next.js server env.
+ * Configure EXTRACT_SERVICE_URL in the Next.js server env if needed.
  */
 
 const DEFAULT_EXTRACT_URL = "https://autobrief-production.up.railway.app";
