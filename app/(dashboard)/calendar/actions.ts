@@ -46,43 +46,12 @@ export async function updateDeadlineName(
 
 export async function deleteDeadline(deadlineId: string) {
   const supabase = await createServerSupabase();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
-    throw new Error("You must be signed in.");
-  }
 
-  const { data: owner, error: ownerError } = await supabase
-    .from("business_owners")
-    .select("id")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (ownerError || !owner?.id) {
-    throw new Error(ownerError?.message ?? "Workspace not found.");
-  }
-
-  const { data: dl, error: dlError } = await supabase
+  const { error: delError } = await supabase
     .from("deadlines")
-    .select("id, client_id")
-    .eq("id", deadlineId)
-    .maybeSingle();
-  if (dlError || !dl?.client_id) {
-    throw new Error(dlError?.message ?? "Deadline not found.");
-  }
+    .delete()
+    .eq("id", deadlineId);
 
-  const { data: client, error: clientError } = await supabase
-    .from("clients")
-    .select("id")
-    .eq("id", dl.client_id)
-    .eq("owner_id", owner.id)
-    .maybeSingle();
-  if (clientError || !client?.id) {
-    throw new Error("Deadline not found or access denied.");
-  }
-
-  const { error: delError } = await supabase.from("deadlines").delete().eq("id", deadlineId);
   if (delError) {
     throw new Error(delError.message);
   }

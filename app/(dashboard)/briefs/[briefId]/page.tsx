@@ -1,7 +1,6 @@
 import { CompletionMeter } from "@/components/completion-meter";
 import { SectionCard } from "@/components/section-card";
 import { SendClientLink } from "@/components/send-client-link";
-import { VersionDiff } from "@/components/version-diff";
 import { briefCardTitle, briefToSections, gapsToMissingList } from "@/lib/brief-helpers";
 import { createServerSupabase } from "@/lib/supabase";
 import { headers } from "next/headers";
@@ -72,12 +71,8 @@ export default async function BriefDetailsPage({
         </div>
       </div>
 
-      <div className="mb-8">
-        <VersionDiff />
-      </div>
-
       {brief.final_proposal ? (
-        <ProposalView proposal={brief.final_proposal} sections={sections} briefId={brief.id} />
+        <ProposalView proposal={brief.final_proposal} sections={sections} briefId={brief.id} imageUrls={brief.image_urls || []} />
       ) : (
         <>
           <p className="mb-6 max-w-2xl text-[#7b6f63]">

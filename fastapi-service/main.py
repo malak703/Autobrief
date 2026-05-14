@@ -13,6 +13,7 @@ from typing import List
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, UploadFile, HTTPException, Body, Form
+from fastapi.middleware.cors import CORSMiddleware
 from groq import Groq
 from PIL import Image
 from pydantic import AliasChoices, BaseModel, Field
@@ -20,32 +21,11 @@ from starlette.requests import Request as StarletteRequest
 
 
 class LargeMultipartRequest(StarletteRequest):
-    def form(self, *, max_files: int | float = 1000, max_fields: int | float = 1000, max_part_size: int = 20 * 1024 * 1024):
+    def form(self, *, max_files: int | float = 1000, max_fields: int | float = 1000, max_part_size: int = 50 * 1024 * 1024):
         return super().form(max_files=max_files, max_fields=max_fields, max_part_size=max_part_size)
-
-# Lazy-load pytesseract so a broken optional stack (e.g. bad numpy wheel) does not crash app startup.
-_pytesseract_mod = None
-_pytesseract_import_attempted = False
-
-
-def _get_pytesseract():
-    """Return pytesseract module or None if missing or unloadable."""
-    global _pytesseract_mod, _pytesseract_import_attempted
-    if _pytesseract_import_attempted:
-        return _pytesseract_mod
-    _pytesseract_import_attempted = True
-    try:
-        import pytesseract as pt  # noqa: PLC0415
-
-        _pytesseract_mod = pt
-    except Exception:
-        _pytesseract_mod = None
-    return _pytesseract_mod
-
 
 # Load environment variables from .env file
 load_dotenv()
-
 WORK_FILTER_SYSTEM_PROMPT = (
     "You are a filter. Your only job is to extract work-related \n"
     "information from this conversation.\n\n"
@@ -87,6 +67,13 @@ PROJECT_BRIEF_SYSTEM_PROMPT = (
 )
 
 
+def _truncate_text(text: str, max_chars: int = 4000) -> str:
+    """Ensure text is within safe token limits (roughly 6000 tokens)."""
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars] + "... [truncated for length]"
+
+
 def _groq_api_key_or_raise() -> str:
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
@@ -106,6 +93,14 @@ app = FastAPI(
     description="A FastAPI service for processing various tasks",
     version="1.0.0",
     request_class=LargeMultipartRequest,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -177,7 +172,7 @@ def _normalize_deadline_rows(raw: list) -> List[dict]:
 def _groq_extract_deadlines(work_bullets: str) -> List[dict]:
     """Return [{parsed_date, extracted_text}, ...] from filtered bullets; [] on parse failure."""
     api_key = _groq_api_key_or_raise()
-    model = (os.getenv("GROQ_DEADLINE_MODEL") or "llama-3.3-70b-versatile").strip()
+    model = (os.getenv("GROQ_DEADLINE_MODEL") or "llama-3.1-8b-instant").strip()
     client = Groq(api_key=api_key)
     today_iso = date.today().isoformat()
     system = (
@@ -199,16 +194,25 @@ def _groq_extract_deadlines(work_bullets: str) -> List[dict]:
         "No markdown fences. No other keys."
     )
     user = f"Today's date: {today_iso}\n\nWork bullets:\n\n{work_bullets}"
-    completion = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        temperature=0.1,
-        max_tokens=2048,
-    )
-    raw = (completion.choices[0].message.content or "").strip()
+    for attempt in range(3):
+        try:
+            completion = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                temperature=0.1,
+                max_tokens=1024,
+                timeout=30.0,
+            )
+            raw = (completion.choices[0].message.content or "").strip()
+            break
+        except Exception as e:
+            if attempt == 2:
+                raise e
+            import time
+            time.sleep(2)
     try:
         data = json.loads(_strip_json_fences(raw))
     except json.JSONDecodeError:
@@ -382,13 +386,13 @@ async def extract_text_from_text(text: str = Body(...)):
 def _groq_filter_work_bullets(raw_text: str) -> str:
     """Call Groq chat to keep only work-related lines as verbatim bullet points."""
     api_key = _groq_api_key_or_raise()
-    model = (os.getenv("GROQ_FILTER_MODEL") or "llama-3.3-70b-versatile").strip()
+    model = (os.getenv("GROQ_FILTER_MODEL") or "llama-3.1-8b-instant").strip()
     client = Groq(api_key=api_key)
     user_content = (
         "The following is raw material from a conversation "
         "(text, voice transcripts, and image OCR). "
         "Labels such as [FROM TEXT], [FROM VOICE], or [FROM IMAGE] may appear.\n\n"
-        f"{raw_text}"
+        f"{_truncate_text(raw_text)}"
     )
     completion = client.chat.completions.create(
         model=model,
@@ -397,7 +401,7 @@ def _groq_filter_work_bullets(raw_text: str) -> str:
             {"role": "user", "content": user_content},
         ],
         temperature=0.1,
-        max_tokens=8192,
+        max_tokens=2000,
     )
     return (completion.choices[0].message.content or "").strip()
 
@@ -408,7 +412,7 @@ async def filter_work_content(body: FilterWorkContentBody):
     Take combined extracted text (from uploads / transcripts / OCR) and return
     work-only content as bullet points via Groq (see WORK_FILTER_SYSTEM_PROMPT).
 
-    Optional env: GROQ_FILTER_MODEL (default: llama-3.3-70b-versatile).
+    Optional env: GROQ_FILTER_MODEL (default: llama-3.1-8b-instant).
     """
     print("[OK] POST /filter-work-content endpoint called")
     raw = (body.text or "").strip()
@@ -429,9 +433,9 @@ async def filter_work_content(body: FilterWorkContentBody):
 def _groq_project_brief_from_requirements(filtered_bullets: str) -> str:
     """Turn filtered requirement bullets into the 4-section project brief."""
     api_key = _groq_api_key_or_raise()
-    model = (os.getenv("GROQ_BRIEF_MODEL") or "llama-3.3-70b-versatile").strip()
+    model = (os.getenv("GROQ_BRIEF_MODEL") or "llama-3.1-8b-instant").strip()
     client = Groq(api_key=api_key)
-    user_content = f"Extracted client requirements:\n\n{filtered_bullets}"
+    user_content = f"Extracted client requirements:\n\n{_truncate_text(filtered_bullets)}"
     completion = client.chat.completions.create(
         model=model,
         messages=[
@@ -439,7 +443,7 @@ def _groq_project_brief_from_requirements(filtered_bullets: str) -> str:
             {"role": "user", "content": user_content},
         ],
         temperature=0.2,
-        max_tokens=8192,
+        max_tokens=2000,
     )
     return (completion.choices[0].message.content or "").strip()
 
@@ -450,7 +454,7 @@ async def generate_project_brief(body: ProjectBriefBody):
     Input: output of /filter-work-content (work-only bullets).
     Output: structured 4-section project brief via Groq.
 
-    Optional env: GROQ_BRIEF_MODEL (default: llama-3.3-70b-versatile).
+    Optional env: GROQ_BRIEF_MODEL (default: llama-3.1-8b-instant).
     """
     print("[OK] POST /generate-project-brief endpoint called")
     blob = (body.filtered_text or "").strip()
@@ -468,10 +472,64 @@ async def generate_project_brief(body: ProjectBriefBody):
     return {"project_brief": brief}
 
 
+def _groq_filter_and_brief_combined(raw_text: str) -> dict:
+    """Single Groq call: filter raw text AND generate project brief in one shot."""
+    api_key = _groq_api_key_or_raise()
+    model = (os.getenv("GROQ_BRIEF_MODEL") or "llama-3.1-8b-instant").strip()
+    client = Groq(api_key=api_key)
+
+    combined_system = (
+        "You are a professional project brief writer.\n"
+        "You will receive raw conversation material that may include greetings, jokes, and off-topic messages.\n\n"
+        "Step 1: Mentally filter out everything that is NOT work-related. "
+        "Keep only: project requirements, features, deadlines, budgets, references, feedback, decisions.\n\n"
+        "Step 2: Using ONLY the work-related content, produce a structured project brief.\n\n"
+        "YOUR OUTPUT MUST START WITH THIS EXACT FORMAT:\n\n"
+        "TITLE: <Short Project Headline In Title Case>\n\n"
+        "###\n1. What the client wants\n...\n"
+        "###\n2. Goals & success criteria\n...\n"
+        "###\n3. Gaps & unclear points\n...\n"
+        "###\n4. Follow-up questions\n...\n\n"
+        "RULES:\n"
+        "- The VERY FIRST LINE of your response MUST be: TITLE: followed by a short compelling headline (max 10 words, Title Case, no quotes)\n"
+        "- Separate each section with exactly '###' on its own line\n"
+        "- Separate each follow-up question with '@@@' on its own line\n"
+        "- Be specific. No generic statements. If something isn't in the input, flag it as a gap."
+    )
+
+    user_content = (
+        "The following is raw material from a conversation "
+        "(text, voice transcripts, and image OCR). "
+        "Labels such as [FROM TEXT], [FROM VOICE], or [FROM IMAGE] may appear.\n\n"
+        f"{_truncate_text(raw_text)}"
+    )
+
+    for attempt in range(3):
+        try:
+            completion = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": combined_system},
+                    {"role": "user", "content": user_content},
+                ],
+                temperature=0.2,
+                max_tokens=1500,
+                timeout=45.0,
+            )
+            brief = (completion.choices[0].message.content or "").strip()
+            return {"filtered_text": user_content, "project_brief": brief}
+        except Exception as e:
+            if attempt == 2:
+                raise e
+            import time
+            time.sleep(2)
+    return {"filtered_text": user_content, "project_brief": ""}
+
+
 @app.post("/filter-and-generate-brief")
 async def filter_and_generate_brief(body: FilterWorkContentBody):
     """
-    One call: combined raw extracted text → filter → project brief.
+    One call: combined raw extracted text → filter + project brief in a single LLM call.
     Same inputs as /filter-work-content. Returns both intermediate and final text.
     """
     print("[OK] POST /filter-and-generate-brief endpoint called")
@@ -479,8 +537,7 @@ async def filter_and_generate_brief(body: FilterWorkContentBody):
     if not raw:
         raise HTTPException(status_code=400, detail="No text provided.")
     try:
-        filtered = await asyncio.to_thread(_groq_filter_work_bullets, raw)
-        brief = await asyncio.to_thread(_groq_project_brief_from_requirements, filtered)
+        result = await asyncio.to_thread(_groq_filter_and_brief_combined, raw)
     except HTTPException:
         raise
     except Exception as e:
@@ -488,7 +545,7 @@ async def filter_and_generate_brief(body: FilterWorkContentBody):
             status_code=500,
             detail=f"Failed pipeline: {str(e)}",
         ) from e
-    return {"filtered_text": filtered, "project_brief": brief}
+    return result
 
 
 @app.post("/extract-deadlines")
@@ -496,7 +553,7 @@ async def extract_deadlines(body: DeadlinesFromTextBody):
     """
     Parse filtered work bullets for explicit deadlines; returns rows for the deadlines table.
 
-    Optional env: GROQ_DEADLINE_MODEL (default: llama-3.3-70b-versatile).
+    Optional env: GROQ_DEADLINE_MODEL (default: llama-3.1-8b-instant).
     """
     print("[OK] POST /extract-deadlines endpoint called")
     text = (body.text or "").strip()
@@ -513,33 +570,6 @@ async def extract_deadlines(body: DeadlinesFromTextBody):
         ) from e
     return {"deadlines": rows}
 
-
-def _tesseract_available() -> bool:
-    pt = _get_pytesseract()
-    if pt is None:
-        return False
-    try:
-        pt.get_tesseract_version()
-        return True
-    except Exception:
-        return False
-
-
-def _ocr_tesseract(pil_img: Image.Image) -> str:
-    pt = _get_pytesseract()
-    if pt is None or not _tesseract_available():
-        return ""
-    for lang in ("ara+eng", "eng"):
-        try:
-            out = pt.image_to_string(pil_img, lang=lang).strip()
-            if out:
-                return out
-        except Exception:
-            continue
-    try:
-        return pt.image_to_string(pil_img).strip()
-    except Exception:
-        return ""
 
 
 def _image_to_data_url(pil_img: Image.Image, max_b64_len: int = 4 * 1024 * 1024 - 15_000) -> str:
@@ -584,7 +614,7 @@ def _groq_vision_extract_text(pil_img: Image.Image, api_key: str, model: str) ->
                 ],
             }
         ],
-        max_tokens=4096,
+        max_tokens=2000,
         temperature=0.1,
     )
     raw = (completion.choices[0].message.content or "").strip()
@@ -625,13 +655,10 @@ async def extract_text_from_images(images: List[UploadFile] = File(...)):
         raise HTTPException(status_code=400, detail="No image files provided.")
 
     groq_key = os.getenv("GROQ_API_KEY")
-    if not groq_key and not _tesseract_available():
+    if not groq_key:
         raise HTTPException(
             status_code=503,
-            detail=(
-                "Image extraction needs GROQ_API_KEY (Groq vision, recommended) or "
-                "Tesseract OCR with Arabic/English traineddata installed and on PATH."
-            ),
+            detail="Image extraction needs GROQ_API_KEY (Groq vision).",
         )
 
     chunks: List[str] = []
@@ -666,9 +693,6 @@ async def extract_text_from_images(images: List[UploadFile] = File(...)):
         if groq_key:
             text = await asyncio.to_thread(_groq_vision_try_models, pil, groq_key)
 
-        if not text.strip() and _tesseract_available():
-            text = _ocr_tesseract(pil)
-
         if not text.strip():
             chunks.append("[FROM IMAGE]: No text detected.")
         else:
@@ -680,7 +704,7 @@ async def extract_text_from_images(images: List[UploadFile] = File(...)):
 def _groq_generate_meeting_summary(title: str, transcript: str) -> dict:
     """Generate meeting summary with overview, decisions, requirements, action items, questions, deadlines, and brief updates."""
     api_key = _groq_api_key_or_raise()
-    model = (os.getenv("GROQ_MEETING_MODEL") or "llama-3.3-70b-versatile").strip()
+    model = (os.getenv("GROQ_MEETING_MODEL") or "llama-3.1-8b-instant").strip()
     client = Groq(api_key=api_key)
     
     prompt = f"""
@@ -721,7 +745,7 @@ Meeting title:
 {title}
 
 Transcript:
-{transcript}
+{_truncate_text(transcript)}
 """
 
     completion = client.chat.completions.create(
@@ -731,7 +755,7 @@ Transcript:
             {"role": "user", "content": prompt},
         ],
         temperature=0.1,
-        max_tokens=4096,
+        max_tokens=2000,
     )
     
     raw = (completion.choices[0].message.content or "").strip()
@@ -914,7 +938,7 @@ Meeting title:
 {title}
 
 Transcript:
-{transcript}
+{_truncate_text(transcript)}
 
 Return this exact JSON structure:
 
@@ -961,6 +985,7 @@ Return this exact JSON structure:
             }
         ],
         temperature=0.2,
+        max_tokens=2000,
     )
 
     content = completion.choices[0].message.content

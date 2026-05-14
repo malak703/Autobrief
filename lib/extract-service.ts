@@ -59,6 +59,77 @@ function parseExtractJsonResponse(text: string, res: Response): ExtractRemoteRes
   return { ok: true, extractedText: extracted };
 }
 
+/**
+ * Call Groq Whisper API directly from Next.js (fallback for large files).
+ */
+async function transcribeVoiceDirectGroq(
+  fileName: string,
+  bytes: ArrayBuffer,
+  mimeType: string
+): Promise<ExtractRemoteResult> {
+  let apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    // Fallback: read from .env file directly
+    try {
+      const fs = await import("fs");
+      const path = await import("path");
+      const envPath = path.resolve(process.cwd(), ".env");
+      const envContent = fs.readFileSync(envPath, "utf-8");
+      const match = envContent.match(/^GROQ_API_KEY=(.+)$/m);
+      if (match) apiKey = match[1].trim();
+    } catch { /* ignore */ }
+  }
+  if (!apiKey) {
+    return { ok: false, error: "GROQ_API_KEY not set for direct transcription" };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), VOICE_REQUEST_TIMEOUT_MS);
+
+  try {
+    const body = new FormData();
+    const blob = new Blob([bytes], { type: mimeType || "application/octet-stream" });
+    body.append("file", blob, fileName);
+    body.append("model", "whisper-large-v3");
+
+    const res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body,
+      signal: controller.signal,
+    });
+
+    const text = await res.text();
+    if (!res.ok) {
+      return { ok: false, error: `Groq Whisper API error: ${text.slice(0, 400)}` };
+    }
+
+    let json: { text?: string } = {};
+    try {
+      json = JSON.parse(text) as typeof json;
+    } catch {
+      /* ignore */
+    }
+
+    const transcript = (json.text ?? "").trim();
+    if (!transcript) {
+      return { ok: false, error: "Empty transcription from Groq Whisper" };
+    }
+
+    return { ok: true, extractedText: `[FROM VOICE]: ${transcript}` };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("abort")) {
+      return { ok: false, error: "Direct Groq transcription timed out" };
+    }
+    return { ok: false, error: `Direct Groq transcription failed: ${msg}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function transcribeVoiceRemote(
   fileName: string,
   bytes: ArrayBuffer,
@@ -87,10 +158,11 @@ export async function transcribeVoiceRemote(
     if (msg.includes("abort")) {
       return { ok: false, error: "Transcription timed out" };
     }
-    return {
-      ok: false,
-      error: `Cannot reach extract service at ${baseUrl}: ${msg}`,
-    };
+    // FastAPI unreachable or failed — fall back to direct Groq Whisper call
+    console.warn(
+      `[transcribeVoiceRemote] FastAPI failed (${msg}), falling back to direct Groq Whisper`
+    );
+    return transcribeVoiceDirectGroq(fileName, bytes, mimeType);
   } finally {
     clearTimeout(timer);
   }

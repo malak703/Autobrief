@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase';
+import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,37 +12,41 @@ export async function POST(request: NextRequest) {
           .split('\n')
           .map((q: string) => q.trim())
           .filter((q: string) => q.length > 0 && !q.includes('@@@') && !q.includes('---'));
-        
+
         const questionsWithAnswers = questions.map((q: string, idx: number) => {
           const answerKey = `followup-${idx}`;
           const answer = pageData.followupAnswers[answerKey] || 'No answer provided';
           return `Q: ${q}\nA: ${answer}`;
         }).join('\n\n');
-        
+
         return `## ${section.title}\n\n${questionsWithAnswers}`;
       }
-      
+
       return `## ${section.title}\n\n${section.content}`;
     }).join('\n\n');
 
     const additionalComments = pageData.additionalComments || 'No additional comments';
-    
-    const prompt = `Based on the following project brief information, generate a comprehensive, professional project proposal. Use the chatgpt-4o-latest model capabilities to create a well-structured, detailed proposal.
+
+    const truncate = (text: string, maxChars: number = 4000) => {
+      if (text.length <= maxChars) return text;
+      return text.slice(0, maxChars) + '... [truncated for length]';
+    };
+
+    const prompt = `Based on the following project brief information, generate a comprehensive, professional project proposal. Create a well-structured, detailed proposal.
 
 Project Brief Content:
-${sections}
+${truncate(sections)}
 
 Additional Comments:
-${additionalComments}
+${truncate(additionalComments, 2000)}
 
 Please generate a final project proposal that includes:
 1. Executive Summary
 2. Project Scope & Deliverables  
-3. Timeline & Milestones
-4. Budget Considerations
-5. Next Steps
+3. Next Steps
 
-Format the response as clean, professional markdown that would be suitable for client presentation.`;
+Format the response as clean, professional markdown that would be suitable for client presentation.
+If something wasn't stated, do not include it. Do not hallucinate or make assumptions.`;
 
     // Call Groq API
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -52,7 +56,7 @@ Format the response as clean, professional markdown that would be suitable for c
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant',
         messages: [
           {
             role: 'user',
@@ -60,7 +64,7 @@ Format the response as clean, professional markdown that would be suitable for c
           }
         ],
         temperature: 0.7,
-        max_tokens: 4000,
+        max_tokens: 2000,
       }),
     });
 
@@ -72,7 +76,7 @@ Format the response as clean, professional markdown that would be suitable for c
 
     const result = await response.json();
     const proposal = result.choices?.[0]?.message?.content || 'Failed to generate proposal';
-    
+
     console.log('Proposal generated successfully');
 
     // Save the proposal to Supabase
@@ -94,17 +98,17 @@ Format the response as clean, professional markdown that would be suitable for c
       }
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      proposal 
+    return NextResponse.json({
+      success: true,
+      proposal
     });
 
   } catch (error) {
     console.error('Error generating proposal:', error);
     return NextResponse.json(
-      { 
-        success: false, 
-        error: 'Failed to generate proposal' 
+      {
+        success: false,
+        error: 'Failed to generate proposal'
       },
       { status: 500 }
     );

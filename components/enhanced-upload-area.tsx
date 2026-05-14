@@ -7,6 +7,7 @@ import { createBriefFromUpload } from "@/app/actions/briefs";
 import {
   normalizeIntakeFromFiles,
   resolveZipImagePreviewBlobUrls,
+  resolveZipVoicePreviewBlobUrls,
   type NormalizedMediaEntry,
   type NormalizedTextEntry,
 } from "@/lib/intake-parser";
@@ -23,6 +24,8 @@ export function EnhancedUploadArea({ clientId }: { clientId: string }) {
   const [previewChatImages, setPreviewChatImages] = useState<NormalizedMediaEntry[]>([]);
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
   const [selectedImageNames, setSelectedImageNames] = useState<string[]>([]);
+  const [previewChatVoice, setPreviewChatVoice] = useState<NormalizedMediaEntry[]>([]);
+  const [voicePreviewUrls, setVoicePreviewUrls] = useState<string[]>([]);
   const [rangeStart, setRangeStart] = useState("");
   const [rangeEnd, setRangeEnd] = useState("");
   const [extractStatus, setExtractStatus] = useState<"checking" | "ok" | "error">("checking");
@@ -64,13 +67,18 @@ export function EnhancedUploadArea({ clientId }: { clientId: string }) {
       // Create FormData with all files from all sections
       const formData = new FormData();
       formData.set("clientId", clientId);
+      
+      // Send the UI-extracted texts explicitly
+      if (voiceExtractedText) formData.set("uiVoiceTranscript", voiceExtractedText);
+      if (imageExtractedText) formData.set("uiImageTranscript", imageExtractedText);
+
       formData.set("pastedText", pastedText);
       formData.set("selectedTextIndexes", JSON.stringify(selectedIndexes));
       if (previewChatImages.length > 0) {
         formData.set("selectedImageFileNames", JSON.stringify(selectedImageNames));
       }
 
-      // Add all files from all sections
+      // Add all files from all sections so they get uploaded to Supabase
       [...files, ...voiceFiles, ...imageFiles].forEach((file) => {
         formData.append("assets", file);
       });
@@ -91,6 +99,12 @@ export function EnhancedUploadArea({ clientId }: { clientId: string }) {
       }
       return [];
     });
+    setVoicePreviewUrls((prev) => {
+      for (const u of prev) {
+        if (u) URL.revokeObjectURL(u);
+      }
+      return [];
+    });
     try {
       const parsed = await normalizeIntakeFromFiles(nextFiles, nextPastedText);
       setPreviewTexts(parsed.texts);
@@ -98,14 +112,20 @@ export function EnhancedUploadArea({ clientId }: { clientId: string }) {
       setPreviewChatImages(parsed.images);
       const names = parsed.images.map((img) => img.fileName.toLowerCase());
       setSelectedImageNames(names);
-      const urls = await resolveZipImagePreviewBlobUrls(nextFiles, parsed.images);
-      setImagePreviewUrls(urls);
+      const imgUrls = await resolveZipImagePreviewBlobUrls(nextFiles, parsed.images);
+      setImagePreviewUrls(imgUrls);
+      // Voice files from zip
+      setPreviewChatVoice(parsed.voice);
+      const vUrls = await resolveZipVoicePreviewBlobUrls(nextFiles, parsed.voice);
+      setVoicePreviewUrls(vUrls);
     } catch {
       setPreviewTexts([]);
       setSelectedIndexes([]);
       setPreviewChatImages([]);
       setSelectedImageNames([]);
       setImagePreviewUrls([]);
+      setPreviewChatVoice([]);
+      setVoicePreviewUrls([]);
     }
   }
 
@@ -116,7 +136,7 @@ export function EnhancedUploadArea({ clientId }: { clientId: string }) {
     const s = Math.max(1, Math.min(start, end));
     const e = Math.min(previewTexts.length, Math.max(start, end));
     const range = Array.from({ length: e - s + 1 }, (_, i) => i + (s - 1));
-    setSelectedIndexes((prev) => Array.from(new Set([...prev, ...range])).sort((a, b) => a - b));
+    setSelectedIndexes(range);
   }
 
   async function handleVoiceUpload(files: FileList | null) {
@@ -411,6 +431,49 @@ export function EnhancedUploadArea({ clientId }: { clientId: string }) {
             </p>
           )}
         </div>
+
+        {/* Voice Notes from Chat Export */}
+        <div className="mt-6 border-t border-[#e8dccd] pt-5">
+          <h4 className="mb-3 flex items-center gap-2 font-semibold text-[#2a2118]">
+            <Mic size={16} />
+            Voice Notes from Chat ({previewChatVoice.length})
+          </h4>
+          {previewChatVoice.length > 0 ? (
+            <div className="space-y-3 max-h-72 overflow-y-auto">
+              {previewChatVoice.map((voice, idx) => {
+                const previewUrl = voicePreviewUrls[idx];
+                return (
+                  <div
+                    key={`voice-${idx}`}
+                    className="flex flex-col gap-2 rounded-xl border border-[#eadfce] bg-[#f8f4ed] p-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="truncate text-sm font-medium text-[#2a2118]" title={voice.fileName}>
+                        {voice.fileName}
+                      </p>
+                      {voice.from && (
+                        <span className="ml-2 shrink-0 text-xs text-[#7b6f63]">From {voice.from}</span>
+                      )}
+                    </div>
+                    {previewUrl ? (
+                      <audio controls className="w-full h-8" preload="metadata">
+                        <source src={previewUrl} />
+                        Your browser does not support the audio element.
+                      </audio>
+                    ) : (
+                      <p className="text-xs text-[#7b6f63] italic">Audio preview not available</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-[#7b6f63]">
+              No voice notes detected in this export yet. They appear here when the chat
+              contains .opus, .ogg, or .m4a files inside a .zip.
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Voice and Image Sections */}
@@ -562,6 +625,13 @@ export function EnhancedUploadArea({ clientId }: { clientId: string }) {
             setPreviewChatImages([]);
             setSelectedImageNames([]);
             setImagePreviewUrls((prev) => {
+              for (const u of prev) {
+                if (u) URL.revokeObjectURL(u);
+              }
+              return [];
+            });
+            setPreviewChatVoice([]);
+            setVoicePreviewUrls((prev) => {
               for (const u of prev) {
                 if (u) URL.revokeObjectURL(u);
               }

@@ -65,20 +65,37 @@ function normalizeSpaces(input: string): string {
 
 function parseWhatsAppLine(line: string) {
   const normalized = normalizeSpaces(line);
-  const match = normalized.match(/^(\d{1,2}\/\d{1,2}\/\d{2,4}),\s*(.+?)\s-\s(.*)$/);
-  if (!match) return null;
 
-  const [, datePart, timePart, remainder] = match;
-  const senderIdx = remainder.indexOf(": ");
-  if (senderIdx === -1) {
-    return { at: `${datePart} ${timePart}`, from: null, content: remainder };
+  // Try multiple WhatsApp export formats:
+  // Format 1: "M/D/YY, TIME - sender: message"
+  // Format 2: "[M/D/YY, TIME] sender: message"
+  // Format 3: "DD/MM/YYYY, TIME - sender: message"
+  // Format 4: "D.M.YYYY, TIME - sender: message"
+  const patterns = [
+    // Standard: "1/2/24, 12:00 PM - Name: msg"
+    /^(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}),?\s*(.+?)\s-\s(.*)$/,
+    // Bracketed: "[1/2/24, 12:00:00 PM] Name: msg"
+    /^\[(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}),?\s*(.+?)\]\s*(.*)$/,
+    // No comma between date and time: "1/2/24 12:00 PM - Name: msg"
+    /^(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4})\s+(.+?)\s-\s(.*)$/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern);
+    if (!match) continue;
+    const [, datePart, timePart, remainder] = match;
+    const senderIdx = remainder.indexOf(": ");
+    if (senderIdx === -1) {
+      return { at: `${datePart} ${timePart}`, from: null, content: remainder };
+    }
+    return {
+      at: `${datePart} ${timePart}`,
+      from: remainder.slice(0, senderIdx).trim() || null,
+      content: remainder.slice(senderIdx + 2).trim(),
+    };
   }
 
-  return {
-    at: `${datePart} ${timePart}`,
-    from: remainder.slice(0, senderIdx).trim() || null,
-    content: remainder.slice(senderIdx + 2).trim(),
-  };
+  return null;
 }
 
 function captureAttachmentHint(content: string): string | null {
@@ -92,24 +109,35 @@ function captureAttachmentHint(content: string): string | null {
 }
 
 function parseWhatsAppText(content: string, intake: NormalizedIntake, hints: Map<string, AttachmentHint>) {
-  const lines = content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  for (const line of lines) {
+  const lines = content.split(/\r?\n/);
+  let lastEntry: NormalizedTextEntry | null = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
     const parsed = parseWhatsAppLine(line);
-    if (!parsed?.content) continue;
 
-    intake.texts.push({
-      source: "whatsapp",
-      from: parsed.from,
-      at: parsed.at,
-      content: parsed.content,
-    });
+    if (parsed?.content) {
+      // New timestamped message
+      lastEntry = {
+        source: "whatsapp",
+        from: parsed.from,
+        at: parsed.at,
+        content: parsed.content,
+      };
+      intake.texts.push(lastEntry);
 
-    const attachmentName = captureAttachmentHint(parsed.content);
-    if (attachmentName) {
-      hints.set(attachmentName.toLowerCase(), {
-        sender: parsed.from,
-        kind: classifyByName(attachmentName),
-      });
+      const attachmentName = captureAttachmentHint(parsed.content);
+      if (attachmentName) {
+        hints.set(attachmentName.toLowerCase(), {
+          sender: parsed.from,
+          kind: classifyByName(attachmentName),
+        });
+      }
+    } else if (lastEntry) {
+      // Continuation line — append to previous message
+      lastEntry.content += "\n" + line;
     }
   }
 }
@@ -309,6 +337,55 @@ export async function resolveZipImagePreviewBlobUrls(
   for (let i = 0; i < imageEntries.length; i++) {
     const row = imageEntries[i];
     if (classifyByName(row.fileName) !== "images") continue;
+    const target = row.fileName.toLowerCase();
+    for (const zip of zipInstances) {
+      let found: JSZip.JSZipObject | null = null;
+      for (const entry of Object.values(zip.files)) {
+        if (entry.dir) continue;
+        const base = (entry.name.split("/").pop() ?? entry.name).toLowerCase();
+        if (base === target) {
+          found = entry;
+          break;
+        }
+      }
+      if (!found) continue;
+      try {
+        const blob = await found.async("blob");
+        urls[i] = URL.createObjectURL(blob);
+        break;
+      } catch {
+        // skip bad entry
+      }
+    }
+  }
+
+  return urls;
+}
+
+/**
+ * Build blob: URLs for chat-export voice notes so the upload UI can show
+ * audio players before upload. Caller must revoke URLs when replacing or unmounting.
+ */
+export async function resolveZipVoicePreviewBlobUrls(
+  chatFiles: File[],
+  voiceEntries: NormalizedMediaEntry[]
+): Promise<string[]> {
+  const urls: string[] = voiceEntries.map(() => "");
+  const zips = chatFiles.filter((f) => f.name.toLowerCase().endsWith(".zip"));
+  if (zips.length === 0 || voiceEntries.length === 0) return urls;
+
+  const zipInstances: JSZip[] = [];
+  for (const zf of zips) {
+    try {
+      zipInstances.push(await JSZip.loadAsync(await zf.arrayBuffer()));
+    } catch {
+      // skip invalid zip
+    }
+  }
+  if (zipInstances.length === 0) return urls;
+
+  for (let i = 0; i < voiceEntries.length; i++) {
+    const row = voiceEntries[i];
     const target = row.fileName.toLowerCase();
     for (const zip of zipInstances) {
       let found: JSZip.JSZipObject | null = null;
