@@ -1,9 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
 import { markBriefSentToClient } from "@/app/actions/briefs";
 import type { BriefStatus } from "@/lib/types";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 
 export function SendClientLink({
   briefId,
@@ -21,19 +21,7 @@ export function SendClientLink({
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
-  function copyOnly() {
-    setError(null);
-    setNotice(null);
-    void navigator.clipboard.writeText(clientUrl).then(
-      () => {
-        setNotice("Link copied to clipboard.");
-        setTimeout(() => setNotice(null), 2500);
-      },
-      () => setError("Could not copy automatically; select the link and copy it.")
-    );
-  }
-
-  function sendToClient() {
+  function sendLink() {
     setError(null);
     setNotice(null);
     startTransition(async () => {
@@ -47,43 +35,49 @@ export function SendClientLink({
       } catch {
         // still open tab
       }
-      setNotice("Marked as sent. Opening client page in a new tab.");
+      setNotice("Link copied & opened in a new tab.");
       window.open(clientUrl, "_blank", "noopener,noreferrer");
       setTimeout(() => setNotice(null), 4000);
       router.refresh();
     });
   }
 
+  const copyLink = () => {
+    navigator.clipboard.writeText(clientUrl);
+    setNotice("Link copied!");
+    setTimeout(() => setNotice(null), 3000);
+  };
+
   return (
-    <div className="flex w-full max-w-xl flex-col items-stretch gap-3 sm:max-w-2xl sm:items-end">
-      <label className="block w-full text-left text-xs font-medium text-[#5f5246] sm:text-right">
-        Client review link
-        <input
-          readOnly
-          type="text"
-          value={clientUrl}
-          className="mt-1 w-full rounded-2xl border border-[#e8dccd] bg-[#fffaf2] px-4 py-2.5 text-sm text-[#2a2118] outline-none sm:text-right"
-          onFocus={(e) => e.target.select()}
-        />
-      </label>
+    <div className="flex flex-col items-end gap-3">
       {completion < 80 && (
-        <p className="text-left text-xs text-[#9a7b52] sm:text-right">
+        <p className="text-right text-xs text-[#9a7b52]">
           Completeness is {completion}%. You can still send the link when you are ready.
         </p>
       )}
       {error && (
-        <p className="text-left text-sm text-[#9d574d] sm:text-right" role="alert">
+        <p className="text-right text-sm text-[#9d574d]" role="alert">
           {error}
         </p>
       )}
       {notice && (
-        <p className="text-left text-sm text-[#2d6a4f] sm:text-right">{notice}</p>
+        <p className="text-right text-sm text-[#2d6a4f]">{notice}</p>
       )}
       <div className="flex w-full flex-col sm:flex-row sm:flex-wrap justify-end gap-2">
-        <button type="button" className="btn-secondary w-full sm:w-auto" onClick={copyOnly} disabled={isPending}>
+        <button
+          type="button"
+          className="btn-secondary w-full sm:w-auto"
+          onClick={copyLink}
+          disabled={isPending}
+        >
           Copy link
         </button>
-        <button type="button" className="btn-primary w-full sm:w-auto" onClick={sendToClient} disabled={isPending}>
+        <button
+          type="button"
+          className="btn-primary w-full sm:w-auto"
+          onClick={sendLink}
+          disabled={isPending}
+        >
           {isPending ? "Working…" : status === "sent" ? "Open client link again" : "Send to client"}
         </button>
       </div>

@@ -3,6 +3,40 @@
 import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import { getBriefByToken } from "@/app/actions/get-brief";
+import { computeWordDiff, hasChanges } from "@/lib/word-diff";
+import { splitFollowupQuestionsField } from "@/lib/brief-helpers";
+
+function ReferenceImages({ imageUrls }: { imageUrls: string[] }) {
+  if (!imageUrls || imageUrls.length === 0) return null;
+  return (
+    <div className="card mt-8 p-6">
+      <h3 className="mb-4 text-lg font-bold text-[#2a2118]">
+        📎 Reference Images ({imageUrls.length})
+      </h3>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+        {imageUrls.map((url, idx) => (
+          <a
+            key={idx}
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group overflow-hidden rounded-xl border border-[#e8dccd] bg-[#f8f4ed] transition-shadow hover:shadow-lg"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={url}
+              alt={`Reference ${idx + 1}`}
+              className="aspect-square w-full object-cover transition-transform group-hover:scale-105"
+            />
+            <p className="border-t border-[#e8dccd] px-2 py-1.5 text-center text-xs text-[#7b6f63]">
+              Image {idx + 1}
+            </p>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function PublicBriefPage({
   params,
@@ -120,7 +154,6 @@ export default function PublicBriefPage({
     try {
       // Collect all data from the page
       const pageData: any = {
-        brief: brief,
         sections: sections.map(section => ({
           ...section,
           content: editedContent[section.id] || section.content
@@ -251,6 +284,8 @@ export default function PublicBriefPage({
               </button>
             </div>
           </div>
+          
+          <ReferenceImages imageUrls={brief?.image_urls || []} />
         </div>
       </main>
     );
@@ -277,20 +312,8 @@ export default function PublicBriefPage({
             if (section.id === "followup") {
               const content = section.content || "";
               
-              // Better question splitting logic
-              const questions = content
-                .split('\n')
-                .map((q: string) => q.trim())
-                .filter((q: string) => {
-                  return q.length > 0 && 
-                         !q.toLowerCase().startsWith("here are") &&
-                         !q.toLowerCase().startsWith("follow-up") &&
-                         !q.toLowerCase().startsWith("follow up") &&
-                         !q.match(/^\d+\./) &&
-                         !q.includes('@@@') &&
-                         !q.includes('---') &&
-                         q !== '---';
-                });
+              // Use the proper question parser
+              const { questions } = splitFollowupQuestionsField(content);
 
               if (questions.length === 0) {
                 return (
@@ -379,17 +402,47 @@ export default function PublicBriefPage({
                     <p className="mt-4 leading-8 text-[#5f5246] whitespace-pre-wrap">
                       {editedContent[section.id] || section.content || "—"}</p>
 
-                    <div className="mt-6">
-                      <button 
-                        type="button" 
-                        className="btn-secondary"
-                        onClick={() => {
-                          setEditingSections(prev => new Set(prev).add(section.id));
-                        }}
-                      >
-                        ✕ Edit this
-                      </button>
-                    </div>
+                    {/* Show diff when client has edited this section */}
+                    {editedContent[section.id] && section.content && hasChanges(section.content, editedContent[section.id]) && (
+                      <div className="mt-4 rounded-2xl border border-[#e8dccd] bg-[#fbf3e8] p-5">
+                        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#9a7b52]">
+                          Your changes
+                        </p>
+                        <div className="leading-8 text-[#2a2118]">
+                          {computeWordDiff(section.content, editedContent[section.id]).map((seg, i) => {
+                            if (seg.type === "removed") {
+                              return (
+                                <span key={i} className="rounded bg-[#ffd9d5] px-1 line-through">
+                                  {seg.text}
+                                </span>
+                              );
+                            }
+                            if (seg.type === "added") {
+                              return (
+                                <span key={i} className="rounded bg-[#dcebd6] px-1">
+                                  {seg.text}
+                                </span>
+                              );
+                            }
+                            return <span key={i}>{seg.text}</span>;
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {section.id !== "gaps" && (
+                      <div className="mt-6">
+                        <button 
+                          type="button" 
+                          className="btn-secondary"
+                          onClick={() => {
+                            setEditingSections(prev => new Set(prev).add(section.id));
+                          }}
+                        >
+                          ✕ Edit this
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -417,6 +470,8 @@ export default function PublicBriefPage({
             {submitting ? 'Generating...' : 'Show Final Proposal'}
           </button>
         </div>
+
+        <ReferenceImages imageUrls={brief?.image_urls || []} />
       </div>
     </main>
   );

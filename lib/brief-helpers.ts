@@ -108,10 +108,19 @@ export function briefToSections(brief: Brief): BriefSection[] {
     followup: brief.followup_questions,
   };
 
+  const orig = brief.original_sections;
+  const originalMap: Record<string, string | null | undefined> = {
+    summary: orig?.summary ? summaryTextForSections(orig.summary) : undefined,
+    goals: orig?.goals,
+    gaps: orig?.gaps,
+    followup: orig?.followup_questions,
+  };
+
   return SECTION_META.map(({ id, title }) => ({
     id,
     title,
     content: contentMap[id]?.trim() ?? "",
+    originalContent: originalMap[id]?.trim() ?? undefined,
     status: "pending" as const,
   }));
 }

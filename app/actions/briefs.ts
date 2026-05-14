@@ -403,24 +403,29 @@ export async function createBriefFromUpload(
   }
   normalized.images = applyChatImageNameSelection(normalized.images, selectedImageLowerNames);
 
-  const voiceTranscriptionFailures =
-    normalized.voice.length > 0
-      ? await transcribeAllVoiceNotes(supabase, normalized.voice)
-      : 0;
+  const uiVoiceTranscript = String(formData.get("uiVoiceTranscript") ?? "").trim();
+  const uiImageTranscript = String(formData.get("uiImageTranscript") ?? "").trim();
 
-  const imageExtractionFailures =
-    normalized.images.length > 0
-      ? await extractAllImageScreenshots(supabase, normalized.images)
-      : 0;
+  // If the UI already extracted the text, bypass backend extraction to save time!
+  let voiceTranscriptionFailures = 0;
+  if (normalized.voice.length > 0 && !uiVoiceTranscript) {
+    voiceTranscriptionFailures = await transcribeAllVoiceNotes(supabase, normalized.voice);
+  }
+
+  let imageExtractionFailures = 0;
+  if (normalized.images.length > 0 && !uiImageTranscript) {
+    imageExtractionFailures = await extractAllImageScreenshots(supabase, normalized.images);
+  }
 
   const finalRawInput = JSON.stringify(normalized);
 
-  const voiceTranscripts = normalized.voice
-    .map((v) => v.transcript?.trim())
-    .filter((t): t is string => Boolean(t));
-  const imageTranscripts = normalized.images
-    .map((img) => img.transcript?.trim())
-    .filter((t): t is string => Boolean(t));
+  const voiceTranscripts = uiVoiceTranscript 
+    ? [uiVoiceTranscript] 
+    : normalized.voice.map((v) => v.transcript?.trim()).filter((t): t is string => Boolean(t));
+    
+  const imageTranscripts = uiImageTranscript 
+    ? [uiImageTranscript] 
+    : normalized.images.map((img) => img.transcript?.trim()).filter((t): t is string => Boolean(t));
 
   const labeledPipelineParts: string[] = [];
   for (const row of normalized.texts) {
@@ -500,11 +505,27 @@ export async function createBriefFromUpload(
     filtered_content = pipelineResult.filteredText.trim() || null;
     const { clientTitle, body } = extractBriefTitleLine(pipelineResult.projectBrief);
     const parsed = parseProjectBriefIntoSections(body);
+
+    // Generate a fallback title from the summary section if the AI didn't produce one
+    let finalTitle = clientTitle;
+    if (!finalTitle && parsed.summary) {
+      const firstLine = parsed.summary
+        .split(/\n/)
+        .map((l) => l.replace(/^[-•*]\s*/, "").trim())
+        .find((l) => l.length > 5 && l.length < 100);
+      if (firstLine) {
+        finalTitle = firstLine.length > 60
+          ? firstLine.slice(0, 57).replace(/\s+\S*$/, "") + "…"
+          : firstLine;
+      }
+    }
+    if (!finalTitle) {
+      finalTitle = `Brief for ${client.name}`;
+    }
+
     const summaryBody =
       parsed.summary?.trim() || body.trim().slice(0, 280) || summary;
-    summary = clientTitle
-      ? `TITLE: ${clientTitle}\n\n${summaryBody}`
-      : summaryBody;
+    summary = `TITLE: ${finalTitle}\n\n${summaryBody}`;
     goals = parsed.goals?.trim() || null;
     gaps = parsed.gaps?.trim() || null;
     const followParts = [
@@ -537,6 +558,7 @@ export async function createBriefFromUpload(
       goals,
       gaps,
       followup_questions,
+      original_sections: { summary, goals, gaps, followup_questions },
       voice_url: normalized.voice.length > 0 ? normalized.voice[0].fileUrl : null,
       image_urls: normalized.images.map((row) => row.fileUrl).filter(Boolean),
       extracted_date: new Date().toISOString(),

@@ -44,6 +44,12 @@ export type Brief = {
   created_at: string;
   confirmed_at: string | null;
   final_proposal: string | null;
+  original_sections: {
+    summary?: string | null;
+    goals?: string | null;
+    gaps?: string | null;
+    followup_questions?: string | null;
+  } | null;
 };
 
 export type Feedback = {
@@ -62,6 +68,7 @@ export type BriefSection = {
   id: "summary" | "goals" | "gaps" | "followup";
   title: string;
   content: string;
+  originalContent?: string;
   status: "accepted" | "needs_edit" | "pending";
   clientComment?: string;
 };
