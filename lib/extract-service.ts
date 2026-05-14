@@ -3,7 +3,7 @@
  * Configure EXTRACT_SERVICE_URL (e.g. http://127.0.0.1:8000) in the Next.js server env.
  */
 
-const DEFAULT_EXTRACT_URL = "http://127.0.0.1:8000";
+const DEFAULT_EXTRACT_URL = "https://autobrief-production.up.railway.app";
 const VOICE_REQUEST_TIMEOUT_MS = 180_000;
 const IMAGE_REQUEST_TIMEOUT_MS = 180_000;
 const PIPELINE_REQUEST_TIMEOUT_MS = 300_000;
