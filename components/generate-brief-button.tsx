@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Spinner } from "@/components/spinner";
 
 interface GenerateBriefButtonProps {
   meetingId: string;
@@ -75,7 +76,12 @@ export default function GenerateBriefButton({ meetingId, hasBrief }: GenerateBri
         disabled={loading}
         className="rounded-xl bg-[var(--color-primary)] px-5 py-3 font-semibold text-white hover:bg-[var(--color-primary)]/90 disabled:opacity-50"
       >
-        {loading ? "Processing..." : hasBrief ? "Regenerate Brief" : "Generate Brief"}
+        {loading ? (
+          <span className="flex items-center gap-2">
+            <Spinner size={16} className="text-white" />
+            Processing...
+          </span>
+        ) : hasBrief ? "Regenerate Brief" : "Generate Brief"}
       </button>
       
       {loading && progress && (

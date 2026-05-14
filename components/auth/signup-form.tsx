@@ -3,6 +3,7 @@
 import { formatAuthError } from "@/lib/auth/format-auth-error";
 import { isProbablyValidEmail, normalizeEmail } from "@/lib/auth/email";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
+import { Spinner } from "@/components/spinner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -158,7 +159,8 @@ export function SignupForm() {
         <p className="mt-1 text-xs text-[#a4998d]">At least 8 characters.</p>
       </div>
 
-      <button type="submit" disabled={loading} className="btn-primary w-full">
+      <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
+        {loading && <Spinner size={16} className="text-white" />}
         {loading ? "Creating account…" : "Create account"}
       </button>
 

@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import { getBriefByToken } from "@/app/actions/get-brief";
 import { computeWordDiff, hasChanges } from "@/lib/word-diff";
 import { splitFollowupQuestionsField } from "@/lib/brief-helpers";
+import { Spinner } from "@/components/spinner";
 
 function ReferenceImages({ imageUrls }: { imageUrls: string[] }) {
   if (!imageUrls || imageUrls.length === 0) return null;
@@ -466,7 +467,8 @@ export default function PublicBriefPage({
         </div>
 
         <div className="mt-8 flex justify-end">
-          <button type="button" className="btn-primary" onClick={handleGenerateProposal}>
+          <button type="button" className="btn-primary flex items-center gap-2" onClick={handleGenerateProposal} disabled={submitting}>
+            {submitting && <Spinner size={16} className="text-white" />}
             {submitting ? 'Generating...' : 'Show Final Proposal'}
           </button>
         </div>

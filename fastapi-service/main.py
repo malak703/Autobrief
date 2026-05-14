@@ -241,6 +241,7 @@ async def health_check():
             "/process-client-feedback",
             "/generate-meeting-summary",
             "/process-meeting",
+            "/generate-proposal",
         ],
     }
 
@@ -1016,7 +1017,64 @@ Return this exact JSON structure:
         }
 
 
+class GenerateProposalBody(BaseModel):
+    """Prompt text to generate a client-facing project proposal."""
+    prompt: str = Field(
+        ...,
+        description="Full prompt with project brief content to generate a proposal from.",
+    )
+
+
+def _groq_generate_proposal(prompt: str) -> str:
+    """Call Groq to generate a project proposal from the given prompt."""
+    api_key = _groq_api_key_or_raise()
+    model = (os.getenv("GROQ_BRIEF_MODEL") or "llama-3.1-8b-instant").strip()
+    client = Groq(api_key=api_key)
+
+    for attempt in range(3):
+        try:
+            completion = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.7,
+                max_tokens=2000,
+                timeout=60.0,
+            )
+            return (completion.choices[0].message.content or "").strip()
+        except Exception as e:
+            if attempt == 2:
+                raise e
+            import time
+            time.sleep(2)
+    return ""
+
+
+@app.post("/generate-proposal")
+async def generate_proposal(body: GenerateProposalBody):
+    """
+    Generate a professional project proposal from a prompt.
+    Used by the Next.js frontend to proxy Groq calls through Railway.
+    """
+    print("[OK] POST /generate-proposal endpoint called")
+    prompt = (body.prompt or "").strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="No prompt provided.")
+    try:
+        proposal = await asyncio.to_thread(_groq_generate_proposal, prompt)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate proposal: {str(e)}",
+        ) from e
+    return {"proposal": proposal}
+
+
 if __name__ == "__main__":
     import uvicorn
     print("Starting FastAPI server...")
     uvicorn.run(app, host="0.0.0.0", port=8000)
+

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { TopProgressBar } from "@/components/top-progress-bar";
+import { Suspense } from "react";
 
 export const metadata: Metadata = {
   title: "AutoBrief",
@@ -21,6 +23,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <Suspense fallback={null}>
+          <TopProgressBar />
+        </Suspense>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

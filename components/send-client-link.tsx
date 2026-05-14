@@ -1,6 +1,7 @@
 "use client";
 
 import { markBriefSentToClient } from "@/app/actions/briefs";
+import { Spinner } from "@/components/spinner";
 import type { BriefStatus } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -74,10 +75,11 @@ export function SendClientLink({
         </button>
         <button
           type="button"
-          className="btn-primary w-full sm:w-auto"
+          className="btn-primary w-full sm:w-auto flex items-center justify-center gap-2"
           onClick={sendLink}
           disabled={isPending}
         >
+          {isPending && <Spinner size={16} className="text-white" />}
           {isPending ? "Working…" : status === "sent" ? "Open client link again" : "Send to client"}
         </button>
       </div>

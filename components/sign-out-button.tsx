@@ -1,6 +1,7 @@
 "use client";
 
 import { createBrowserSupabase } from "@/lib/supabase/browser";
+import { Spinner } from "@/components/spinner";
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -25,7 +26,7 @@ export function SignOutButton() {
       disabled={loading}
       className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-[#5f5246] transition hover:bg-[#f6efe4] hover:text-[#2a2118]"
     >
-      <LogOut size={20} />
+      {loading ? <Spinner size={20} className="text-[#5f5246]" /> : <LogOut size={20} />}
       <span className="font-medium">{loading ? "Signing out…" : "Sign out"}</span>
     </button>
   );
