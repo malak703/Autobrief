@@ -26,7 +26,7 @@ Brief uploads call a small Python service for **voice transcription** and **imag
 4. Copy `.env.example` to `.env` and set `GROQ_API_KEY` (same key as in Groq console; never commit `.env`).
 5. Run: `python -m uvicorn main:app --host 0.0.0.0 --port 8000`
 
-In the Next app, set `EXTRACT_SERVICE_URL=http://127.0.0.1:8000` in `.env.local` (or your deployed API URL in production). While developing, open `/api/extract-health` to confirm the app can reach the API.
+In the Next app, set `EXTRACT_SERVICE_URL=https://autobrief-production.up.railway.app` in `.env` (or `.env.local` for local overrides). Open `/api/extract-health` to confirm the app can reach the API.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
