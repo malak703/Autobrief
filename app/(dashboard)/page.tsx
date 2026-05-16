@@ -41,7 +41,7 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <div className="mb-10 grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3">
+      <div className="mb-10 grid grid-cols-2 gap-4 sm:gap-5 md:grid-cols-3">
         <StatCard label="Clients" value={clientsCount.toString()} />
         <StatCard label="Briefs" value={briefs.length.toString()} />
       </div>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { GenerationOverlay } from "@/components/generation-overlay";
 
 interface GenerateBriefButtonProps {
   meetingId: string;
@@ -58,13 +59,13 @@ export default function GenerateBriefButton({ meetingId, hasBrief }: GenerateBri
         }, 1000);
       } else {
         setProgress("");
+        setLoading(false);
         alert(data.error || "Failed to generate brief.");
       }
     } catch (error) {
       setProgress("");
-      alert("An unexpected error occurred.");
-    } finally {
       setLoading(false);
+      alert("An unexpected error occurred.");
     }
   }
 
@@ -75,20 +76,16 @@ export default function GenerateBriefButton({ meetingId, hasBrief }: GenerateBri
         disabled={loading}
         className="rounded-xl bg-[var(--color-primary)] px-5 py-3 font-semibold text-white hover:bg-[var(--color-primary)]/90 disabled:opacity-50"
       >
-        {loading ? "Processing..." : hasBrief ? "Regenerate Brief" : "Generate Brief"}
+        {hasBrief ? "Regenerate Brief" : "Generate Brief"}
       </button>
-      
-      {loading && progress && (
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-          <div className="flex items-center space-x-2">
-            <div className="h-2 w-2 animate-pulse rounded-full bg-[var(--color-primary)]"></div>
-            <p className="text-sm text-[var(--color-text-secondary)]">{progress}</p>
-          </div>
-          <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
-            This may take 1-3 minutes depending on the audio length. Please keep this page open.
-          </p>
-        </div>
+
+      {loading && (
+        <GenerationOverlay
+          message={progress || "Generating brief..."}
+          subMessage="This may take 1–3 minutes depending on the audio length. Please keep this page open."
+        />
       )}
     </div>
   );
 }
+

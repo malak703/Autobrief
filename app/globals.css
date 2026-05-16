@@ -75,3 +75,199 @@ body {
   font-weight: 600;
   cursor: pointer;
 }
+
+/* ─── Page Loader Bar ──────────────────────────────── */
+
+.page-loader-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.page-loader-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold), var(--primary), var(--gold));
+  background-size: 200% 100%;
+  border-radius: 0 2px 2px 0;
+  transition: width 0.3s ease-out;
+  animation: shimmer-bar 1.5s ease-in-out infinite;
+  box-shadow: 0 0 10px rgba(201, 154, 74, 0.5), 0 0 5px rgba(201, 154, 74, 0.3);
+}
+
+@keyframes shimmer-bar {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Generation Overlay ───────────────────────────── */
+
+.generation-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(42, 33, 24, 0.45);
+  backdrop-filter: blur(6px);
+  animation: overlay-in 0.3s ease-out;
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.generation-overlay-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  padding: 48px 56px;
+  box-shadow:
+    0 25px 60px rgba(74, 51, 30, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+  animation: card-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ── Spinner ── */
+
+.generation-spinner {
+  position: relative;
+  width: 56px;
+  height: 56px;
+}
+
+.generation-spinner-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  border-top-color: var(--primary);
+  border-right-color: var(--gold);
+  animation: spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+.generation-spinner-ring-delay {
+  inset: 6px;
+  border-top-color: var(--gold);
+  border-right-color: var(--primary);
+  animation-delay: -0.3s;
+  animation-direction: reverse;
+}
+
+.generation-spinner-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: pulse-dot 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.6; }
+}
+
+/* ── Overlay Text ── */
+
+.generation-overlay-message {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  text-align: center;
+  margin: 0;
+}
+
+.generation-overlay-sub {
+  font-size: 14px;
+  color: var(--muted);
+  text-align: center;
+  margin: 0;
+  max-width: 280px;
+}
+
+/* ── Bouncing Dots ── */
+
+.generation-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.generation-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+  animation: bounce-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes bounce-dot {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-8px); opacity: 1; }
+}
+
+/* ─── Page Content Fade-In ─────────────────────────── */
+
+.page-fade-in {
+  animation: page-fade 0.35s ease-out;
+}
+
+@keyframes page-fade {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Brief Page Loading Skeleton ──────────────────── */
+
+.brief-loading-skeleton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 24px;
+}
+
+.skeleton-pulse {
+  background: linear-gradient(
+    90deg,
+    var(--surface-soft) 25%,
+    var(--border) 50%,
+    var(--surface-soft) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: 12px;
+}
+
+@keyframes skeleton-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}

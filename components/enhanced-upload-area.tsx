@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { UploadCloud, Mic, Image, MessageSquare, Send, FileText, X } from "lucide-react";
 import { createBriefFromUpload } from "@/app/actions/briefs";
+import { extractImageRemote, transcribeVoiceRemote } from "@/lib/extract-service";
 import {
   normalizeIntakeFromFiles,
   resolveZipImagePreviewBlobUrls,
@@ -11,7 +9,9 @@ import {
   type NormalizedMediaEntry,
   type NormalizedTextEntry,
 } from "@/lib/intake-parser";
-import { transcribeVoiceRemote, extractImageRemote } from "@/lib/extract-service";
+import { Image, MessageSquare, Mic, Send, UploadCloud, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 export function EnhancedUploadArea({ clientId }: { clientId: string }) {
   const router = useRouter();
@@ -67,7 +67,7 @@ export function EnhancedUploadArea({ clientId }: { clientId: string }) {
       // Create FormData with all files from all sections
       const formData = new FormData();
       formData.set("clientId", clientId);
-      
+
       // Send the UI-extracted texts explicitly
       if (voiceExtractedText) formData.set("uiVoiceTranscript", voiceExtractedText);
       if (imageExtractedText) formData.set("uiImageTranscript", imageExtractedText);
@@ -143,7 +143,7 @@ export function EnhancedUploadArea({ clientId }: { clientId: string }) {
     if (!files) return;
     const newFiles = Array.from(files);
     setVoiceFiles(newFiles);
-    
+
     if (newFiles.length > 0) {
       setIsProcessingVoice(true);
       try {
@@ -163,7 +163,7 @@ export function EnhancedUploadArea({ clientId }: { clientId: string }) {
     if (!files) return;
     const newFiles = Array.from(files);
     setImageFiles(newFiles);
-    
+
     if (newFiles.length > 0) {
       setIsProcessingImages(true);
       try {
@@ -383,9 +383,8 @@ export function EnhancedUploadArea({ clientId }: { clientId: string }) {
                   return (
                     <label
                       key={`${key}-${idx}`}
-                      className={`flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-white ${
-                        checked ? "border-[#9a7b52] ring-2 ring-[#d4c4a8]" : "border-[#eadfce]"
-                      }`}
+                      className={`flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-white ${checked ? "border-[#9a7b52] ring-2 ring-[#d4c4a8]" : "border-[#eadfce]"
+                        }`}
                     >
                       <div className="relative aspect-square bg-[#f5efe6]">
                         {previewUrl ? (

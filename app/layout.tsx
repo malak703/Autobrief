@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { PageLoader } from "@/components/page-loader";
 
 export const metadata: Metadata = {
   title: "AutoBrief",
@@ -21,8 +23,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <Suspense fallback={null}>
+          <PageLoader />
+        </Suspense>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );
-}
+}

@@ -1,4 +1,6 @@
 import { createServerSupabase } from '@/lib/supabase';
+import { extractDeadlinesRemote } from '@/lib/extract-service';
+import { revalidatePath } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
@@ -79,10 +81,12 @@ If something wasn't stated, do not include it. Do not hallucinate or make assump
 
     console.log('Proposal generated successfully');
 
-    // Save the proposal to Supabase
+    // Save the proposal to Supabase & extract deadlines
     if (token) {
       try {
         const supabase = await createServerSupabase();
+
+        // Save the proposal text
         const { error: updateError } = await supabase
           .from('briefs')
           .update({ final_proposal: proposal })
@@ -92,6 +96,38 @@ If something wasn't stated, do not include it. Do not hallucinate or make assump
           console.error('Failed to save proposal to DB:', updateError);
         } else {
           console.log('Proposal saved to Supabase successfully');
+        }
+
+        // Look up the brief's client_id so we can attach deadlines
+        const { data: brief } = await supabase
+          .from('briefs')
+          .select('client_id')
+          .eq('token', token)
+          .maybeSingle();
+
+        // Extract deadlines from the proposal and insert into the calendar
+        if (brief?.client_id) {
+          try {
+            const dl = await extractDeadlinesRemote(proposal);
+            if (dl.ok && dl.deadlines.length > 0) {
+              let insertedDeadlines = 0;
+              for (const row of dl.deadlines) {
+                const { error: dErr } = await supabase.from('deadlines').insert({
+                  client_id: brief.client_id,
+                  extracted_text: row.extracted_text,
+                  parsed_date: row.parsed_date,
+                  calendar_event_id: null,
+                });
+                if (!dErr) insertedDeadlines++;
+              }
+              if (insertedDeadlines > 0) {
+                console.log(`Inserted ${insertedDeadlines} deadline(s) from proposal`);
+                revalidatePath('/calendar');
+              }
+            }
+          } catch (dlError) {
+            console.error('Deadline extraction from proposal failed:', dlError);
+          }
         }
       } catch (dbError) {
         console.error('DB error saving proposal:', dbError);

@@ -46,13 +46,13 @@ export default async function BriefDetailsPage({
 
   return (
     <div>
-      <div className="card mb-8 p-8">
+      <div className="card mb-6 p-4 sm:mb-8 sm:p-8">
         <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#9a7b52]">
               Brief review
             </p>
-            <h1 className="mt-2 text-3xl font-bold text-[#2a2118] md:text-5xl">{briefCardTitle(brief)}</h1>
+            <h1 className="mt-2 text-2xl font-bold text-[#2a2118] sm:text-3xl md:text-5xl">{briefCardTitle(brief)}</h1>
             <p className="mt-3 text-base text-[#7b6f63] md:text-lg">
               Version {brief.version} · {brief.status.replace("_", " ")}
             </p>

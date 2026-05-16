@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import { getBriefByToken } from "@/app/actions/get-brief";
 import { computeWordDiff, hasChanges } from "@/lib/word-diff";
 import { splitFollowupQuestionsField } from "@/lib/brief-helpers";
+import { GenerationOverlay } from "@/components/generation-overlay";
 
 function ReferenceImages({ imageUrls }: { imageUrls: string[] }) {
   if (!imageUrls || imageUrls.length === 0) return null;
@@ -48,6 +49,7 @@ export default function PublicBriefPage({
   const [sections, setSections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [proposalProgress, setProposalProgress] = useState("");
   const [editingSections, setEditingSections] = useState<Set<string>>(new Set());
   const [editedContent, setEditedContent] = useState<Record<string, string>>({});
   const [finalProposal, setFinalProposal] = useState<string>("");
@@ -150,6 +152,7 @@ export default function PublicBriefPage({
 
   const handleGenerateProposal = async () => {
     setSubmitting(true);
+    setProposalProgress("Preparing your brief data...");
     
     try {
       // Collect all data from the page
@@ -177,6 +180,23 @@ export default function PublicBriefPage({
 
       // Call API to generate final proposal
       console.log('Sending data to generate proposal:', pageData);
+      setProposalProgress("Generating your proposal with AI...");
+
+      // Progress steps simulation
+      const steps = [
+        "Analyzing brief sections...",
+        "Crafting proposal structure...",
+        "Finalizing proposal..."
+      ];
+      let stepIdx = 0;
+      const progressTimer = setInterval(() => {
+        if (stepIdx < steps.length) {
+          setProposalProgress(steps[stepIdx]);
+          stepIdx++;
+        } else {
+          clearInterval(progressTimer);
+        }
+      }, 8000);
       
       const response = await fetch('/api/generate-proposal', {
         method: 'POST',
@@ -188,6 +208,8 @@ export default function PublicBriefPage({
           token
         }),
       });
+
+      clearInterval(progressTimer);
       
       if (response.ok) {
         const result = await response.json();
@@ -210,8 +232,18 @@ export default function PublicBriefPage({
   if (loading) {
     return (
       <main className="min-h-screen bg-[#f6efe4] px-5 py-10">
-        <div className="mx-auto max-w-4xl text-center">
-          <p className="text-[#7b6f63]">Loading...</p>
+        <div className="mx-auto max-w-4xl brief-loading-skeleton">
+          <div className="generation-spinner">
+            <div className="generation-spinner-ring" />
+            <div className="generation-spinner-ring generation-spinner-ring-delay" />
+            <div className="generation-spinner-dot" />
+          </div>
+          <p className="text-[#7b6f63] text-lg font-medium">Loading brief...</p>
+          <div className="w-full max-w-md space-y-3">
+            <div className="skeleton-pulse h-4 w-full" />
+            <div className="skeleton-pulse h-4 w-3/4" />
+            <div className="skeleton-pulse h-4 w-1/2" />
+          </div>
         </div>
       </main>
     );
@@ -235,29 +267,29 @@ export default function PublicBriefPage({
   // If a final proposal exists, show ONLY the proposal view
   if (showProposal && finalProposal) {
     return (
-      <main className="min-h-screen bg-[#f6efe4] px-5 py-10">
+      <main className="min-h-screen bg-[#f6efe4] px-3 py-6 sm:px-5 sm:py-10">
         <div className="mx-auto max-w-4xl">
-          <div className="card mb-8 p-8 text-center">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#9a7b52]">
+          <div className="card mb-6 p-5 text-center sm:mb-8 sm:p-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#9a7b52] sm:text-sm">
               Final proposal
             </p>
-            <h1 className="mt-2 text-4xl font-bold leading-tight text-[#2a2118] sm:text-5xl">
+            <h1 className="mt-2 text-2xl font-bold leading-tight text-[#2a2118] sm:text-4xl md:text-5xl">
               {headline}
             </h1>
           </div>
 
-          <div className="card p-8">
-            <h2 className="text-3xl font-bold text-[#2a2118] mb-6">
+          <div className="card p-4 sm:p-8">
+            <h2 className="text-xl font-bold text-[#2a2118] mb-4 sm:text-3xl sm:mb-6">
               Final Project Proposal
             </h2>
-            <div className="bg-white rounded-lg p-8 border border-[#e8dccd]" ref={proposalRef}>
-              <div className="prose prose-lg prose-brown max-w-none">
+            <div className="bg-white rounded-lg p-4 sm:p-8 border border-[#e8dccd] overflow-x-auto" ref={proposalRef}>
+              <div className="prose prose-sm sm:prose-lg prose-brown max-w-none break-words">
                 <ReactMarkdown>
                   {finalProposal}
                 </ReactMarkdown>
               </div>
             </div>
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-4 flex flex-col gap-2 sm:mt-6 sm:flex-row sm:justify-end sm:gap-3">
               <button 
                 type="button" 
                 className="btn-secondary"
@@ -292,16 +324,16 @@ export default function PublicBriefPage({
   }
 
   return (
-    <main className="min-h-screen bg-[#f6efe4] px-5 py-10">
+    <main className="min-h-screen bg-[#f6efe4] px-3 py-6 sm:px-5 sm:py-10">
       <div className="mx-auto max-w-4xl">
-        <div className="card mb-8 p-8 text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#9a7b52]">
+        <div className="card mb-6 p-5 text-center sm:mb-8 sm:p-8">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#9a7b52] sm:text-sm">
             Client confirmation
           </p>
-          <h1 className="mt-2 text-4xl font-bold leading-tight text-[#2a2118] sm:text-5xl">
+          <h1 className="mt-2 text-2xl font-bold leading-tight text-[#2a2118] sm:text-4xl md:text-5xl">
             {headline}
           </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-lg text-[#7b6f63]">
+          <p className="mx-auto mt-3 max-w-2xl text-sm text-[#7b6f63] sm:mt-4 sm:text-lg">
             Please review each section. Mark it as correct or request a change.
             You can type feedback or record a voice note.
           </p>
@@ -317,8 +349,8 @@ export default function PublicBriefPage({
 
               if (questions.length === 0) {
                 return (
-                  <div key={section.id} className="card p-6">
-                    <h2 className="text-2xl font-bold text-[#2a2118]">
+                  <div key={section.id} className="card p-4 sm:p-6">
+                    <h2 className="text-lg font-bold text-[#2a2118] sm:text-2xl">
                       {section.title}
                     </h2>
                     <p className="mt-4 leading-8 text-[#5f5246] whitespace-pre-wrap">
@@ -353,8 +385,8 @@ export default function PublicBriefPage({
             }
 
             return (
-              <div key={section.id} className="card p-6">
-                <h2 className="text-2xl font-bold text-[#2a2118]">
+              <div key={section.id} className="card p-4 sm:p-6">
+                <h2 className="text-lg font-bold text-[#2a2118] sm:text-2xl">
                   {section.title}
                 </h2>
 
@@ -451,11 +483,11 @@ export default function PublicBriefPage({
         </div>
 
         {/* Additional Comments Section */}
-        <div className="card mt-8 p-6">
-          <h2 className="text-2xl font-bold text-[#2a2118] mb-4">
+        <div className="card mt-6 p-4 sm:mt-8 sm:p-6">
+          <h2 className="text-lg font-bold text-[#2a2118] mb-3 sm:text-2xl sm:mb-4">
             Additional Comments
           </h2>
-          <p className="text-[#7b6f63] mb-6">
+          <p className="text-sm text-[#7b6f63] mb-4 sm:text-base sm:mb-6">
             Do you have any additional comments or feedback about this brief?
           </p>
           <textarea
@@ -465,11 +497,18 @@ export default function PublicBriefPage({
           />
         </div>
 
-        <div className="mt-8 flex justify-end">
-          <button type="button" className="btn-primary" onClick={handleGenerateProposal}>
-            {submitting ? 'Generating...' : 'Show Final Proposal'}
+        <div className="mt-6 flex justify-end sm:mt-8">
+          <button type="button" className="btn-primary w-full sm:w-auto" onClick={handleGenerateProposal} disabled={submitting}>
+            Show Final Proposal
           </button>
         </div>
+
+        {submitting && (
+          <GenerationOverlay
+            message={proposalProgress || "Generating proposal..."}
+            subMessage="We're crafting your final proposal. This may take a moment."
+          />
+        )}
 
         <ReferenceImages imageUrls={brief?.image_urls || []} />
       </div>

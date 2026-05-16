@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
 import { updateBriefSection } from "@/app/actions/briefs";
 import {
   joinFollowupQuestionsField,
   splitFollowupQuestionsField,
 } from "@/lib/brief-helpers";
-import { computeWordDiff, hasChanges } from "@/lib/word-diff";
 import type { BriefSection } from "@/lib/types";
+import { computeWordDiff, hasChanges } from "@/lib/word-diff";
+import { useEffect, useState, useTransition } from "react";
 
 function DiffDisplay({ original, current }: { original: string; current: string }) {
   if (!hasChanges(original, current)) return null;

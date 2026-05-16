@@ -49,21 +49,21 @@ export function SendClientLink({
   };
 
   return (
-    <div className="flex flex-col items-end gap-3">
+    <div className="flex flex-col items-stretch gap-3 sm:items-end">
       {completion < 80 && (
-        <p className="text-right text-xs text-[#9a7b52]">
+        <p className="text-center text-xs text-[#9a7b52] sm:text-right">
           Completeness is {completion}%. You can still send the link when you are ready.
         </p>
       )}
       {error && (
-        <p className="text-right text-sm text-[#9d574d]" role="alert">
+        <p className="text-center text-sm text-[#9d574d] sm:text-right" role="alert">
           {error}
         </p>
       )}
       {notice && (
-        <p className="text-right text-sm text-[#2d6a4f]">{notice}</p>
+        <p className="text-center text-sm text-[#2d6a4f] sm:text-right">{notice}</p>
       )}
-      <div className="flex w-full flex-col sm:flex-row sm:flex-wrap justify-end gap-2">
+      <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
         <button
           type="button"
           className="btn-secondary w-full sm:w-auto"
